@@ -9,6 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from start_work_contract import manager_target, required_route_specs
+
 
 def run_git(repo: Path, *args: str) -> tuple[int, str, str]:
     proc = subprocess.run(
@@ -122,16 +124,10 @@ def has_route(
 def validate_handoff_route(
     entries: list[dict[str, object]],
     *,
-    manager_target: str,
+    manager_direct: bool,
     problems: list[str],
 ) -> bool:
-    required = [
-        ("M", "D1", "work order ready", "n/a"),
-        ("D1", manager_target, "implementation ready", "n/a"),
-        ("M", "R1", "review-ready package", "n/a"),
-        ("R1", "D1", "blocking findings", "yes"),
-        ("R1", manager_target, "accepted or blocked", "n/a"),
-    ]
+    required = required_route_specs(manager_direct)
     missing = [
         f"{source}->{target} trigger={trigger} manager_copy={manager_copy}"
         for source, target, trigger, manager_copy in required
@@ -204,9 +200,9 @@ def inspect_team(repo: Path) -> dict[str, object]:
             f"expected={acknowledgements_ready}"
         )
 
-    manager_target = "M" if expected_manager_direct else "M via recorded callback (manual relay)"
+    target = manager_target(expected_manager_direct)
     handoff_route = route_entries(team.get("handoff_route", []), problems)
-    route_ready = validate_handoff_route(handoff_route, manager_target=manager_target, problems=problems)
+    route_ready = validate_handoff_route(handoff_route, manager_direct=expected_manager_direct, problems=problems)
     codex_thread_ready = direct_ready and route_ready
     callback_ready = manual_relay_ready and route_ready
 
@@ -222,7 +218,7 @@ def inspect_team(repo: Path) -> dict[str, object]:
         "manual_relay_ready": callback_ready,
         "manager_direct_handoff": expected_manager_direct,
         "handoff_route_valid": route_ready,
-        "manager_target": manager_target,
+        "manager_target": target,
         "roster": {
             "M": compact_roster_entry(manager),
             "D1": compact_roster_entry(developer),

@@ -113,7 +113,7 @@ For tiny tasks, explain that start-work overhead is unnecessary and handle the t
 After editing scripts or handoff rules, run:
 
 ```bash
-python3 -m py_compile scripts/init_team.py scripts/ack_team.py scripts/init_run.py scripts/append_event.py scripts/inspect_team.py scripts/inspect_run.py scripts/inspect_project.py scripts/test_start_work.py
+python3 -m py_compile scripts/start_work_contract.py scripts/init_team.py scripts/ack_team.py scripts/init_run.py scripts/append_event.py scripts/inspect_team.py scripts/inspect_run.py scripts/inspect_project.py scripts/test_start_work.py
 python3 scripts/test_start_work.py
 python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
 ```

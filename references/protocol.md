@@ -24,6 +24,8 @@ Manager owns both ledgers. Developer and Reviewer do not edit them directly.
 
 The team roster is the source of truth for thread ids and callbacks. Every role must know the same roster before handoffs begin.
 
+The executable contract for run statuses, status transitions, and required handoff routes lives in `scripts/start_work_contract.py`. Update that module and the smoke tests together when the protocol changes.
+
 Use `scripts/inspect_project.py --repo <repo-root> --print-json` for a project-level resume snapshot. It combines team readiness and recent run summaries without loading the full ledgers.
 
 ## Team Lifecycle

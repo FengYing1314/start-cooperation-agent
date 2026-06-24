@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 
-from append_event import ALLOWED_STATUS_TRANSITIONS, RUN_STATUSES, current_run_status
+from start_work_contract import ALLOWED_STATUS_TRANSITIONS, RUN_STATUSES, current_run_status
 
 
 def load_json_object(path: Path, problems: list[str]) -> dict[str, object]:

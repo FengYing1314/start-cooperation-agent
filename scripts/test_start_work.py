@@ -18,6 +18,7 @@ APPEND_EVENT = SCRIPT_DIR / "append_event.py"
 INSPECT_TEAM = SCRIPT_DIR / "inspect_team.py"
 INSPECT_RUN = SCRIPT_DIR / "inspect_run.py"
 INSPECT_PROJECT = SCRIPT_DIR / "inspect_project.py"
+START_WORK_CONTRACT = SCRIPT_DIR / "start_work_contract.py"
 SKILL_ROOT = SCRIPT_DIR.parent
 
 
@@ -660,6 +661,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "inspect_team.py" in skill, skill
     assert "inspect_run.py" in skill, skill
     assert "inspect_project.py" in skill, skill
+    assert "start_work_contract.py" in skill, skill
     assert "quick_validate.py" in skill, skill
     assert not (SKILL_ROOT / "README.md").exists(), "README.md should not be in the skill package"
     assert "callback/manual relay fallback" in skill, skill
@@ -689,6 +691,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "Do not claim a handoff was sent unless a real message was sent" in roles, roles
 
     protocol = (SKILL_ROOT / "references" / "protocol.md").read_text(encoding="utf-8")
+    assert "scripts/start_work_contract.py" in protocol, protocol
     assert "## Mode-Specific Transport" in protocol, protocol
     assert "Direct codex-thread route" in protocol, protocol
     assert "do not claim that a thread message was sent unless one really was" in protocol, protocol
@@ -709,6 +712,36 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "direct-message development team" not in openai_yaml, openai_yaml
 
 
+def test_shared_contract_matches_generated_routes(root: Path) -> None:
+    assert START_WORK_CONTRACT.exists(), START_WORK_CONTRACT
+
+    sys.path.insert(0, str(SCRIPT_DIR))
+    try:
+        import start_work_contract
+        import init_team as init_team_script
+    finally:
+        try:
+            sys.path.remove(str(SCRIPT_DIR))
+        except ValueError:
+            pass
+
+    direct_route = init_team_script.build_route(True)
+    direct_specs = [
+        (entry["from"], entry["to"], entry["trigger"], entry["manager_copy"])
+        for entry in direct_route
+    ]
+    assert direct_specs == start_work_contract.required_route_specs(True), direct_specs
+    assert direct_route[1]["to"] == "M", direct_route
+
+    relay_route = init_team_script.build_route(False)
+    relay_specs = [
+        (entry["from"], entry["to"], entry["trigger"], entry["manager_copy"])
+        for entry in relay_route
+    ]
+    assert relay_specs == start_work_contract.required_route_specs(False), relay_specs
+    assert relay_route[1]["to"] == start_work_contract.MANUAL_RELAY_MANAGER_TARGET, relay_route
+
+
 def main() -> int:
     tests = [
         test_team_id_is_stable,
@@ -722,6 +755,7 @@ def main() -> int:
         test_subagent_fallback_without_team,
         test_fallback_mode_requires_reason,
         test_reference_routing_is_progressive,
+        test_shared_contract_matches_generated_routes,
     ]
     with tempfile.TemporaryDirectory(prefix="start-work-tests-") as temp:
         root = Path(temp)

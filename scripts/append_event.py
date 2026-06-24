@@ -10,43 +10,7 @@ import re
 import sys
 from pathlib import Path
 
-RUN_STATUSES = {
-    "init",
-    "manager_work_order",
-    "developer_running",
-    "developer_done",
-    "main_integration_check",
-    "reviewer_running",
-    "review_done",
-    "fix_required",
-    "developer_fix_running",
-    "main_fixing",
-    "accepted",
-    "blocked",
-    "final_delivery",
-}
-
-DIRECT_SEND_STATUSES = {
-    "developer_running",
-    "reviewer_running",
-    "developer_fix_running",
-}
-
-ALLOWED_STATUS_TRANSITIONS = {
-    "init": {"manager_work_order", "blocked"},
-    "manager_work_order": {"developer_running", "blocked"},
-    "developer_running": {"developer_done", "blocked"},
-    "developer_done": {"main_integration_check", "blocked"},
-    "main_integration_check": {"reviewer_running", "blocked"},
-    "reviewer_running": {"review_done", "blocked"},
-    "review_done": {"accepted", "fix_required", "blocked"},
-    "fix_required": {"developer_fix_running", "main_fixing", "blocked"},
-    "developer_fix_running": {"main_integration_check", "blocked"},
-    "main_fixing": {"main_integration_check", "blocked"},
-    "accepted": {"final_delivery"},
-    "blocked": {"final_delivery"},
-    "final_delivery": set(),
-}
+from start_work_contract import ALLOWED_STATUS_TRANSITIONS, DIRECT_SEND_STATUSES, RUN_STATUSES, current_run_status
 
 EVENT_LOG_HEADER = "| Time | ID | Kind | Actor | To | Thread | Event Status | Run Status | Summary | File |"
 EVENT_LOG_SEPARATOR = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
@@ -155,11 +119,6 @@ def set_run_status(text: str, status: str) -> str:
     if re.search(r"^Status:.*$", text, flags=re.MULTILINE):
         return re.sub(r"^Status:.*$", f"Status: {status}", text, count=1, flags=re.MULTILINE)
     return text.rstrip() + f"\n\nStatus: {status}\n"
-
-
-def current_run_status(text: str) -> str:
-    match = re.search(r"^Status:\s*(\S+).*$", text, flags=re.MULTILINE)
-    return match.group(1) if match else ""
 
 
 def current_status(run_dir: Path, coordination: Path) -> str:

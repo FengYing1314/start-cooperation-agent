@@ -11,6 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from start_work_contract import required_route_specs
+
 IGNORE_RULE = "/.agent-work/"
 
 
@@ -113,7 +115,6 @@ def ack_complete(team: dict[str, object]) -> bool:
 
 
 def build_route(manager_direct: bool) -> list[dict[str, str]]:
-    manager_target = "M" if manager_direct else "M via recorded callback (manual relay)"
     developer_to_manager_note = (
         "Developer sends completion directly to Manager for integration check."
         if manager_direct
@@ -129,42 +130,22 @@ def build_route(manager_direct: bool) -> list[dict[str, str]]:
         if manager_direct
         else "Reviewer prepares accepted or blocked status for Manager through callback/manual relay."
     )
+    notes = {
+        ("M", "work order ready"): "Manager sends the work order directly to Developer.",
+        ("D1", "implementation ready"): developer_to_manager_note,
+        ("M", "review-ready package"): "Manager sends the review package directly to Reviewer.",
+        ("R1", "blocking findings"): reviewer_fix_note,
+        ("R1", "accepted or blocked"): reviewer_to_manager_note,
+    }
     return [
         {
-            "from": "M",
-            "to": "D1",
-            "trigger": "work order ready",
-            "manager_copy": "n/a",
-            "notes": "Manager sends the work order directly to Developer.",
-        },
-        {
-            "from": "D1",
-            "to": manager_target,
-            "trigger": "implementation ready",
-            "manager_copy": "n/a",
-            "notes": developer_to_manager_note,
-        },
-        {
-            "from": "M",
-            "to": "R1",
-            "trigger": "review-ready package",
-            "manager_copy": "n/a",
-            "notes": "Manager sends the review package directly to Reviewer.",
-        },
-        {
-            "from": "R1",
-            "to": "D1",
-            "trigger": "blocking findings",
-            "manager_copy": "yes",
-            "notes": reviewer_fix_note,
-        },
-        {
-            "from": "R1",
-            "to": manager_target,
-            "trigger": "accepted or blocked",
-            "manager_copy": "n/a",
-            "notes": reviewer_to_manager_note,
-        },
+            "from": source,
+            "to": target,
+            "trigger": trigger,
+            "manager_copy": manager_copy,
+            "notes": notes[(source, trigger)],
+        }
+        for source, target, trigger, manager_copy in required_route_specs(manager_direct)
     ]
 
 
