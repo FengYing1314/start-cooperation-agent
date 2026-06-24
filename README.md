@@ -180,6 +180,8 @@ start-work/
     protocol.md
     roles.md
     templates.md
+    templates-team.md
+    templates-run.md
   scripts/
     init_team.py
     ack_team.py

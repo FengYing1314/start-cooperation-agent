@@ -19,14 +19,18 @@ Every team member must know the same roster: Manager, Developer, Reviewer thread
 
 Use direct role-to-role handoffs over Manager polling. After Manager defines the route and work order, the current sender must push the next message to the target thread with the available thread messaging tool. Manager must not use `read_thread` as the normal communication path; read another thread only for recovery, audit, user-requested status, or when an expected direct callback is missing. Direct `codex-thread` mode requires a Manager thread id; callback-only Manager targets are manual relay fallback.
 
-## Required References
+## Reference Routing
 
-Read these before starting real work:
+Load only the reference needed for the next action:
 
-- `references/protocol.md` for team lifecycle, state machine, roster, ownership, and handoff rules.
-- `references/roles.md` for Manager, Developer, and Reviewer responsibilities.
-- `references/templates.md` when preparing standing instructions, work orders, roster updates, or handoffs.
-- `references/codex-thread-mode.md` when creating or messaging long-lived Codex threads.
+- `references/protocol.md` for team lifecycle, state machine, roster ownership, dirty work, ledger status, or handoff rules.
+- `references/roles.md` for role-specific duties, review/fix contracts, and what each role must not do.
+- `references/codex-thread-mode.md` for thread-tool discovery, project selection, thread creation, messaging, replacement, or fallback selection.
+- `references/templates-team.md` for team roster, standing instructions, acknowledgements, or roster-update payloads.
+- `references/templates-run.md` for task work orders, review packages, fix handoffs, final summaries, or coordination ledger shape.
+- `references/templates.md` only when unsure which template file applies; it is an index and contains no payload bodies.
+
+Do not load `README.md` for runtime decisions; it is repository-facing documentation. Prefer generated `team/*.md` files over hand-writing standing instructions.
 
 ## Initialize Team Once
 

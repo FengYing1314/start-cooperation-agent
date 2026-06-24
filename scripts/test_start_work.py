@@ -15,6 +15,7 @@ INIT_TEAM = SCRIPT_DIR / "init_team.py"
 ACK_TEAM = SCRIPT_DIR / "ack_team.py"
 INIT_RUN = SCRIPT_DIR / "init_run.py"
 APPEND_EVENT = SCRIPT_DIR / "append_event.py"
+SKILL_ROOT = SCRIPT_DIR.parent
 
 
 def run(command: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -226,6 +227,24 @@ def test_fallback_mode_requires_reason(root: Path) -> None:
     assert "--fallback-reason is required" in combined, combined
 
 
+def test_reference_routing_is_progressive(root: Path) -> None:
+    skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+    assert "Reference Routing" in skill, skill
+    assert "Load only the reference needed for the next action" in skill, skill
+    assert "templates-team.md" in skill, skill
+    assert "templates-run.md" in skill, skill
+    assert "Do not load `README.md` for runtime decisions" in skill, skill
+
+    template_index = (SKILL_ROOT / "references" / "templates.md").read_text(encoding="utf-8")
+    assert "This file is an index" in template_index, template_index
+    assert "## Standing Developer Instruction" not in template_index, template_index
+    assert len(template_index.splitlines()) <= 30, template_index
+
+    run_templates = (SKILL_ROOT / "references" / "templates-run.md").read_text(encoding="utf-8")
+    assert "These payloads assume direct `codex-thread` mode" in run_templates, run_templates
+    assert "do not claim that a thread message was sent" in run_templates, run_templates
+
+
 def main() -> int:
     tests = [
         test_team_id_is_stable,
@@ -233,6 +252,7 @@ def main() -> int:
         test_direct_thread_happy_path,
         test_subagent_fallback_without_team,
         test_fallback_mode_requires_reason,
+        test_reference_routing_is_progressive,
     ]
     with tempfile.TemporaryDirectory(prefix="start-work-tests-") as temp:
         root = Path(temp)
