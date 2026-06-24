@@ -32,6 +32,22 @@ DIRECT_SEND_STATUSES = {
     "developer_fix_running",
 }
 
+ALLOWED_STATUS_TRANSITIONS = {
+    "init": {"manager_work_order", "blocked"},
+    "manager_work_order": {"developer_running", "blocked"},
+    "developer_running": {"developer_done", "blocked"},
+    "developer_done": {"main_integration_check", "blocked"},
+    "main_integration_check": {"reviewer_running", "blocked"},
+    "reviewer_running": {"review_done", "blocked"},
+    "review_done": {"accepted", "fix_required", "blocked"},
+    "fix_required": {"developer_fix_running", "main_fixing", "blocked"},
+    "developer_fix_running": {"main_integration_check", "blocked"},
+    "main_fixing": {"main_integration_check", "blocked"},
+    "accepted": {"final_delivery"},
+    "blocked": {"final_delivery"},
+    "final_delivery": set(),
+}
+
 
 def slugify(value: str, fallback: str = "event") -> str:
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
@@ -133,6 +149,11 @@ def set_run_status(text: str, status: str) -> str:
     return text.rstrip() + f"\n\nStatus: {status}\n"
 
 
+def current_run_status(text: str) -> str:
+    match = re.search(r"^Status:\s*(\S+).*$", text, flags=re.MULTILINE)
+    return match.group(1) if match else ""
+
+
 def validate_run_status(status: str) -> None:
     if status and status not in RUN_STATUSES:
         allowed = ", ".join(sorted(RUN_STATUSES))
@@ -152,6 +173,23 @@ def validate_status_transport(args: argparse.Namespace, run_dir: Path) -> None:
         )
     if mode in {"subagent", "single-agent"} and not args.thread_id.strip():
         raise SystemExit("--allow-fallback-direct-status requires --thread-id for fallback direct-send statuses.")
+
+
+def validate_status_transition(args: argparse.Namespace, coordination: Path) -> None:
+    if not args.run_status or args.allow_status_jump:
+        return
+    text = coordination.read_text(encoding="utf-8")
+    current = current_run_status(text)
+    if not current or current == args.run_status:
+        return
+    allowed = ALLOWED_STATUS_TRANSITIONS.get(current, set())
+    if args.run_status not in allowed:
+        allowed_text = ", ".join(sorted(allowed)) or "<none>"
+        raise SystemExit(
+            f"Invalid run status transition: {current} -> {args.run_status}. "
+            f"Allowed next statuses: {allowed_text}. "
+            "Use --allow-status-jump only for recovery or audit corrections."
+        )
 
 
 def main() -> int:
@@ -176,6 +214,11 @@ def main() -> int:
         "--allow-fallback-direct-status",
         action="store_true",
         help="Allow direct-send running statuses in fallback runs only when a real message was sent.",
+    )
+    parser.add_argument(
+        "--allow-status-jump",
+        action="store_true",
+        help="Bypass state-machine transition checks for recovery or audit corrections.",
     )
     parser.add_argument("--msg-id", default="", help="Explicit local message/event id.")
     parser.add_argument("--body", default="", help="Optional payload text.")
@@ -204,6 +247,7 @@ def main() -> int:
         raise SystemExit(f"Event id already exists in this run: {local_id}")
     validate_run_status(args.run_status)
     validate_status_transport(args, run_dir)
+    validate_status_transition(args, coordination)
     timestamp = dt.datetime.now().astimezone().replace(microsecond=0).isoformat()
 
     body = read_body(args)

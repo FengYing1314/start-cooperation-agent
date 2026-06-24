@@ -12,6 +12,7 @@ Prefer generated ledgers and recorded messages:
 
 - Use `scripts/init_run.py` for the coordination ledger shape.
 - Use `scripts/append_event.py` for message and status records.
+- `scripts/append_event.py` enforces the run state machine; use `--allow-status-jump` only for recovery or audit corrections.
 - In fallback mode, keep the fallback reason in the ledger, return results to the current caller, and do not claim that a thread message was sent.
 
 ## Direct Send Status Rule

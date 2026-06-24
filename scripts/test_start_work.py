@@ -139,6 +139,24 @@ def test_direct_thread_happy_path(root: Path) -> None:
     )
     run_data = json.loads(run_result.stdout)
     run_dir = Path(str(run_data["run_dir"]))
+    invalid_result = script(
+        APPEND_EVENT,
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        "status",
+        "--actor",
+        "M",
+        "--summary",
+        "skip to accepted",
+        "--run-status",
+        "accepted",
+        check=False,
+    )
+    invalid_combined = invalid_result.stdout + invalid_result.stderr
+    assert invalid_result.returncode != 0, invalid_combined
+    assert "Invalid run status transition" in invalid_combined, invalid_combined
+
     event_result = script(
         APPEND_EVENT,
         "--run-dir",
@@ -185,6 +203,24 @@ def test_direct_thread_happy_path(root: Path) -> None:
     coordination = (run_dir / "coordination.md").read_text(encoding="utf-8")
     assert "Status: developer_running" in coordination, coordination
     assert "Manager sends the work order directly to Developer." in coordination, coordination
+
+    jumped_result = script(
+        APPEND_EVENT,
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        "status",
+        "--actor",
+        "M",
+        "--summary",
+        "audit jump",
+        "--run-status",
+        "accepted",
+        "--allow-status-jump",
+        "--print-json",
+    )
+    jumped = json.loads(jumped_result.stdout)
+    assert jumped["summary"] == "audit jump", jumped
 
 
 def test_subagent_fallback_without_team(root: Path) -> None:
@@ -234,6 +270,21 @@ def test_subagent_fallback_without_team(root: Path) -> None:
     assert blocked_status.returncode != 0, blocked_combined
     assert "records a real direct send" in blocked_combined, blocked_combined
 
+    script(
+        APPEND_EVENT,
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        "status",
+        "--actor",
+        "M",
+        "--to",
+        "D1",
+        "--summary",
+        "fallback work order recorded",
+        "--run-status",
+        "manager_work_order",
+    )
     allowed_status = script(
         APPEND_EVENT,
         "--run-dir",
@@ -299,6 +350,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "do not claim that a thread message was sent" in run_templates, run_templates
     assert "## Manager Work Order" not in run_templates, run_templates
     assert "--allow-fallback-direct-status" in run_templates, run_templates
+    assert "--allow-status-jump" in run_templates, run_templates
     assert len(run_templates.splitlines()) <= 40, run_templates
 
     for name in ("templates-work-order.md", "templates-review.md", "templates-final.md"):
@@ -314,6 +366,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "Direct codex-thread route" in protocol, protocol
     assert "do not claim that a thread message was sent unless one really was" in protocol, protocol
     assert "--allow-fallback-direct-status" in protocol, protocol
+    assert "--allow-status-jump" in protocol, protocol
 
     openai_yaml = (SKILL_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
     assert "roster-routed" in openai_yaml, openai_yaml
