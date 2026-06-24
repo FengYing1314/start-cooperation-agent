@@ -74,6 +74,8 @@ Each task gets a run ledger:
 
 Use `scripts/init_run.py` to create a run. In `codex-thread` mode it must read `team/team.json`; if the team is missing, incomplete, unacknowledged, or lacks `M.thread_id` for direct mode, it must fail with a clear instruction to initialize or acknowledge the team first.
 
+`run.json` is the machine-readable run index. It must include `current_status`, status update metadata, last event metadata, mode, team roster snapshot, and paths to the ledger files so a later agent can resume without parsing prose first.
+
 In `subagent` or `single-agent` mode, `init_run.py` can create a run without an initialized team, but `--fallback-reason` is required and must explain why the long-lived thread team is not being used.
 
 The default ignore rule is `/.agent-work/` in `.git/info/exclude`, not `.gitignore`.
@@ -122,7 +124,7 @@ review_done
 -> reviewer_running
 ```
 
-Use `scripts/append_event.py --run-status <status>` to advance status and append the event together. Each event records both its event status and run status so the ledger can be replayed later. The script rejects transitions outside these flows unless `--allow-status-jump` is used for recovery or audit corrections.
+Use `scripts/append_event.py --run-status <status>` to advance status and append the event together. Each event records both its event status and run status so the ledger can be replayed later. `append_event.py` also updates `run.json` with the current status and last event. The script rejects transitions outside these flows unless `--allow-status-jump` is used for recovery or audit corrections.
 
 The smoke test must exercise the full fix-review loop as an executable invariant, not only isolated transitions.
 

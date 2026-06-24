@@ -162,6 +162,20 @@ def current_run_status(text: str) -> str:
     return match.group(1) if match else ""
 
 
+def current_status(run_dir: Path, coordination: Path) -> str:
+    text = coordination.read_text(encoding="utf-8")
+    markdown_status = current_run_status(text)
+    metadata = load_json(run_dir / "run.json") or {}
+    metadata_status = str(metadata.get("current_status", "")).strip()
+    if metadata_status and markdown_status and metadata_status != markdown_status:
+        raise SystemExit(
+            "Run status mismatch: "
+            f"run.json current_status={metadata_status}, coordination.md Status={markdown_status}. "
+            "Repair the ledger before appending more events."
+        )
+    return metadata_status or markdown_status
+
+
 def validate_run_status(status: str) -> None:
     if status and status not in RUN_STATUSES:
         allowed = ", ".join(sorted(RUN_STATUSES))
@@ -183,11 +197,10 @@ def validate_status_transport(args: argparse.Namespace, run_dir: Path) -> None:
         raise SystemExit("--allow-fallback-direct-status requires --thread-id for fallback direct-send statuses.")
 
 
-def validate_status_transition(args: argparse.Namespace, coordination: Path) -> None:
+def validate_status_transition(args: argparse.Namespace, run_dir: Path, coordination: Path) -> None:
     if not args.run_status or args.allow_status_jump:
         return
-    text = coordination.read_text(encoding="utf-8")
-    current = current_run_status(text)
+    current = current_status(run_dir, coordination)
     if not current or current == args.run_status:
         return
     allowed = ALLOWED_STATUS_TRANSITIONS.get(current, set())
@@ -198,6 +211,24 @@ def validate_status_transition(args: argparse.Namespace, coordination: Path) -> 
             f"Allowed next statuses: {allowed_text}. "
             "Use --allow-status-jump only for recovery or audit corrections."
         )
+
+
+def update_run_metadata(run_dir: Path, event: dict[str, object], event_count: int) -> None:
+    metadata_path = run_dir / "run.json"
+    metadata = load_json(metadata_path)
+    if metadata is None:
+        return
+    metadata["last_event_id"] = event["id"]
+    metadata["last_event_at"] = event["time"]
+    metadata["last_event_actor"] = event["actor"]
+    metadata["last_event_summary"] = event["summary"]
+    metadata["event_count"] = event_count
+    run_status = str(event.get("run_status", "")).strip()
+    if run_status:
+        metadata["current_status"] = run_status
+        metadata["status_updated_at"] = event["time"]
+        metadata["status_event_id"] = event["id"]
+    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def main() -> int:
@@ -255,7 +286,7 @@ def main() -> int:
         raise SystemExit(f"Event id already exists in this run: {local_id}")
     validate_run_status(args.run_status)
     validate_status_transport(args, run_dir)
-    validate_status_transition(args, coordination)
+    validate_status_transition(args, run_dir, coordination)
     timestamp = dt.datetime.now().astimezone().replace(microsecond=0).isoformat()
 
     body = read_body(args)
@@ -285,6 +316,7 @@ def main() -> int:
 
     with events_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+    update_run_metadata(run_dir, event, len(events) + 1)
 
     row = (
         f"| {table_cell(timestamp)} | {table_cell(local_id)} | {table_cell(args.kind)} | "

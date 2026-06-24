@@ -169,6 +169,8 @@ def test_direct_thread_happy_path(root: Path) -> None:
     )
     run_data = json.loads(run_result.stdout)
     run_dir = Path(str(run_data["run_dir"]))
+    assert run_data["current_status"] == "init", run_data
+    assert run_data["event_count"] == 0, run_data
     invalid_result = script(
         APPEND_EVENT,
         "--run-dir",
@@ -233,6 +235,11 @@ def test_direct_thread_happy_path(root: Path) -> None:
     coordination = (run_dir / "coordination.md").read_text(encoding="utf-8")
     assert "Status: developer_running" in coordination, coordination
     assert "Manager sends the work order directly to Developer." in coordination, coordination
+    run_metadata = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert run_metadata["current_status"] == "developer_running", run_metadata
+    assert run_metadata["status_event_id"] == "M-002", run_metadata
+    assert run_metadata["last_event_id"] == "M-002", run_metadata
+    assert run_metadata["event_count"] == 2, run_metadata
 
     jumped_result = script(
         APPEND_EVENT,
@@ -251,6 +258,9 @@ def test_direct_thread_happy_path(root: Path) -> None:
     )
     jumped = json.loads(jumped_result.stdout)
     assert jumped["summary"] == "audit jump", jumped
+    jumped_metadata = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert jumped_metadata["current_status"] == "accepted", jumped_metadata
+    assert jumped_metadata["status_event_id"] == "M-003", jumped_metadata
 
 
 def test_full_fix_review_cycle_status_path(root: Path) -> None:
@@ -319,6 +329,60 @@ def test_full_fix_review_cycle_status_path(root: Path) -> None:
 
     event_lines = (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()
     assert len(event_lines) == len(statuses), event_lines
+    run_metadata = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert run_metadata["current_status"] == "final_delivery", run_metadata
+    assert run_metadata["status_event_id"] == "M-007", run_metadata
+    assert run_metadata["last_event_id"] == "M-007", run_metadata
+    assert run_metadata["event_count"] == len(statuses), run_metadata
+
+
+def test_run_json_status_mismatch_is_rejected(root: Path) -> None:
+    repo = make_repo(root, "status-mismatch")
+    init_team(
+        repo,
+        "--manager-thread-id",
+        "manager-thread",
+        "--developer-thread-id",
+        "dev-thread",
+        "--reviewer-thread-id",
+        "review-thread",
+    )
+    ack(repo, "D1")
+    ack(repo, "R1")
+    run_result = script(
+        INIT_RUN,
+        "--repo",
+        str(repo),
+        "--slug",
+        "mismatch",
+        "--request",
+        "test status mismatch",
+        "--print-json",
+    )
+    run_data = json.loads(run_result.stdout)
+    run_dir = Path(str(run_data["run_dir"]))
+    metadata_path = run_dir / "run.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["current_status"] = "developer_running"
+    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    proc = script(
+        APPEND_EVENT,
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        "status",
+        "--actor",
+        "M",
+        "--summary",
+        "advance with mismatched ledger",
+        "--run-status",
+        "developer_done",
+        check=False,
+    )
+    combined = proc.stdout + proc.stderr
+    assert proc.returncode != 0, combined
+    assert "Run status mismatch" in combined, combined
 
 
 def test_subagent_fallback_without_team(root: Path) -> None:
@@ -437,6 +501,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "quick_validate.py" in skill, skill
     assert not (SKILL_ROOT / "README.md").exists(), "README.md should not be in the skill package"
     assert "callback/manual relay fallback" in skill, skill
+    assert "structured run metadata" in skill, skill
     assert "full fix-review loop progression" in skill, skill
 
     template_index = (SKILL_ROOT / "references" / "templates.md").read_text(encoding="utf-8")
@@ -466,6 +531,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "do not claim that a thread message was sent unless one really was" in protocol, protocol
     assert "--allow-fallback-direct-status" in protocol, protocol
     assert "--allow-status-jump" in protocol, protocol
+    assert "machine-readable run index" in protocol, protocol
+    assert "updates `run.json` with the current status and last event" in protocol, protocol
     assert "records both its event status and run status" in protocol, protocol
     assert "full fix-review loop as an executable invariant" in protocol, protocol
 
@@ -481,6 +548,7 @@ def main() -> int:
         test_callback_only_rejected_for_direct_thread_mode,
         test_direct_thread_happy_path,
         test_full_fix_review_cycle_status_path,
+        test_run_json_status_mismatch_is_rejected,
         test_subagent_fallback_without_team,
         test_fallback_mode_requires_reason,
         test_reference_routing_is_progressive,
