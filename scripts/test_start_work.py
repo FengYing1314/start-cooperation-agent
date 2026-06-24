@@ -253,6 +253,11 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     for name in ("templates-work-order.md", "templates-review.md", "templates-final.md"):
         assert (SKILL_ROOT / "references" / name).exists(), name
 
+    roles = (SKILL_ROOT / "references" / "roles.md").read_text(encoding="utf-8")
+    assert "## Transport Rules" in roles, roles
+    assert "through the roster target" in roles, roles
+    assert "Do not claim a handoff was sent unless a real message was sent" in roles, roles
+
 
 def main() -> int:
     tests = [

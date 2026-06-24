@@ -1,5 +1,13 @@
 # Start Work Roles
 
+## Contents
+
+- Manager
+- Developer
+- Reviewer
+- Transport rules
+- Shared rules
+
 ## Manager
 
 The current user-facing conversation is Manager unless the user explicitly assigns another coordinator.
@@ -12,7 +20,7 @@ Manager responsibilities:
 - Broadcast standing instructions and roster updates.
 - Define each task goal, non-goals, ownership, acceptance criteria, and checks.
 - Maintain the per-task run ledger.
-- Send Manager-originated handoffs directly to the target role thread.
+- Send Manager-originated handoffs through the roster target.
 - Inspect Developer changes before review.
 - Send review-ready packages to Reviewer.
 - Decide whether blocking findings go to Developer, Manager, or the user.
@@ -38,7 +46,7 @@ Developer responsibilities:
 - Implement only assigned work orders.
 - Work inside assigned ownership.
 - Use focused checks when useful.
-- Send completion handoffs directly to Manager when implementation or fixes are ready.
+- Send completion handoffs to Manager through the roster target when implementation or fixes are ready.
 - Stop and ask Manager when scope must expand or conflicts appear.
 
 Developer may use internal subagents only inside assigned ownership and remains responsible for their output.
@@ -50,7 +58,7 @@ Developer must not:
 - revert unrelated changes;
 - stage, commit, push, or rewrite history unless the user explicitly requested it;
 - continue using stale thread ids after a roster update.
-- wait for Manager to read the Developer thread instead of sending the required direct handoff.
+- wait for Manager to read the Developer thread instead of sending or returning the required handoff payload.
 
 Developer response contract:
 
@@ -77,8 +85,8 @@ Reviewer responsibilities:
 - Review integrated repository state after Manager sends or authorizes a review-ready package.
 - Prioritize bugs, regressions, missing checks, data ownership issues, security issues, and project-rule violations.
 - Classify findings as blocking or non-blocking.
-- Send blocking fix handoffs directly to Developer with a separate Manager copy.
-- Send accepted or blocked status directly to Manager.
+- Send blocking fix handoffs directly to Developer with a separate Manager copy or relay payload when needed.
+- Send accepted or blocked status to Manager through the roster target.
 
 Reviewer must not:
 
@@ -87,7 +95,7 @@ Reviewer must not:
 - report speculative issues without evidence;
 - approve work without considering required checks and project invariants;
 - bypass Manager's integration checkpoint for final acceptance.
-- wait for Manager to read the Reviewer thread instead of sending the required direct handoff.
+- wait for Manager to read the Reviewer thread instead of sending or returning the required handoff payload.
 
 Reviewer report contract:
 
@@ -102,10 +110,18 @@ Next handoff sent:
 Handoff payload if not sent:
 ```
 
+## Transport Rules
+
+- Direct `codex-thread` mode requires actual thread ids for Manager, Developer, and Reviewer.
+- When a roster target has a thread id and messaging is available, send the handoff directly with the thread messaging tool.
+- When Manager lacks a thread id, use the recorded callback only if it is a real user-approved route.
+- When no direct route is available, return the exact handoff payload and target for manual relay.
+- Do not claim a handoff was sent unless a real message was sent.
+
 ## Shared Rules
 
 - Every role must honor the nearest project instructions.
 - Every role must treat pre-existing changes as user or other-agent work.
 - Every handoff must include run id, sender, receiver, status, summary, changed files or findings, checks, and requested next action.
-- Every handoff sender must push the message to the next roster target directly when thread messaging is available.
+- Every handoff sender must use the next roster target directly when thread messaging is available, or return the unsent payload and target when it is not.
 - Roster changes must be acknowledged before further handoffs.
