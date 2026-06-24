@@ -75,7 +75,7 @@ Manager outbound prompts should be saved in the run `messages/` directory and re
 Manager send sequence:
 
 ```text
-1. Write the exact outbound payload from `references/templates-run.md`.
+1. Write the exact outbound payload from `references/templates-work-order.md` for Developer work or `references/templates-review.md` for Reviewer work.
 2. Record it with `scripts/append_event.py --kind message --actor M --to <role> --body-file <payload>`.
 3. Call `send_message_to_thread` with the recipient thread id from `team.json` and the same payload.
 4. If the send succeeds, record the next running status with `scripts/append_event.py --kind status --run-status developer_running` for Developer work, or `--run-status reviewer_running` for Reviewer work.

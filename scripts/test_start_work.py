@@ -233,7 +233,11 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "Load only the reference needed for the next action" in skill, skill
     assert "templates-team.md" in skill, skill
     assert "templates-run.md" in skill, skill
-    assert "Do not load `README.md` for runtime decisions" in skill, skill
+    assert "templates-work-order.md" in skill, skill
+    assert "templates-review.md" in skill, skill
+    assert "templates-final.md" in skill, skill
+    assert "quick_validate.py" in skill, skill
+    assert not (SKILL_ROOT / "README.md").exists(), "README.md should not be in the skill package"
 
     template_index = (SKILL_ROOT / "references" / "templates.md").read_text(encoding="utf-8")
     assert "This file is an index" in template_index, template_index
@@ -241,8 +245,13 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert len(template_index.splitlines()) <= 30, template_index
 
     run_templates = (SKILL_ROOT / "references" / "templates-run.md").read_text(encoding="utf-8")
-    assert "These payloads assume direct `codex-thread` mode" in run_templates, run_templates
+    assert "Do not use it as a source payload" in run_templates, run_templates
     assert "do not claim that a thread message was sent" in run_templates, run_templates
+    assert "## Manager Work Order" not in run_templates, run_templates
+    assert len(run_templates.splitlines()) <= 40, run_templates
+
+    for name in ("templates-work-order.md", "templates-review.md", "templates-final.md"):
+        assert (SKILL_ROOT / "references" / name).exists(), name
 
 
 def main() -> int:

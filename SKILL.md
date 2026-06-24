@@ -27,10 +27,13 @@ Load only the reference needed for the next action:
 - `references/roles.md` for role-specific duties, review/fix contracts, and what each role must not do.
 - `references/codex-thread-mode.md` for thread-tool discovery, project selection, thread creation, messaging, replacement, or fallback selection.
 - `references/templates-team.md` for team roster, standing instructions, acknowledgements, or roster-update payloads.
-- `references/templates-run.md` for task work orders, review packages, fix handoffs, final summaries, or coordination ledger shape.
+- `references/templates-run.md` for selecting the right per-task template and applying direct-send status rules.
+- `references/templates-work-order.md` for Manager work orders and Developer completion handoffs.
+- `references/templates-review.md` for review requests, blocking fix handoffs, re-review, and acceptance payloads.
+- `references/templates-final.md` for final user summaries.
 - `references/templates.md` only when unsure which template file applies; it is an index and contains no payload bodies.
 
-Do not load `README.md` for runtime decisions; it is repository-facing documentation. Prefer generated `team/*.md` files over hand-writing standing instructions.
+Prefer generated `team/*.md` and run ledger files over hand-writing payloads.
 
 ## Initialize Team Once
 
@@ -94,6 +97,7 @@ After editing scripts or handoff rules, run:
 ```bash
 python3 -m py_compile scripts/init_team.py scripts/ack_team.py scripts/init_run.py scripts/append_event.py scripts/test_start_work.py
 python3 scripts/test_start_work.py
+python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
 ```
 
-These checks cover stable team ids, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, send-state progression, and event recording.
+These checks cover stable team ids, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, send-state progression, event recording, progressive reference routing, and skill metadata validity.
