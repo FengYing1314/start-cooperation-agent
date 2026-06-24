@@ -49,20 +49,25 @@ DIRECT_SEND_STATUSES = {
     "developer_fix_running",
 }
 
+ORDERED_STATUS_TRANSITIONS = {
+    "init": ["manager_work_order", "blocked"],
+    "manager_work_order": ["developer_running", "blocked"],
+    "developer_running": ["developer_done", "blocked"],
+    "developer_done": ["main_integration_check", "blocked"],
+    "main_integration_check": ["reviewer_running", "blocked"],
+    "reviewer_running": ["review_done", "blocked"],
+    "review_done": ["accepted", "fix_required", "blocked"],
+    "fix_required": ["developer_fix_running", "main_fixing", "blocked"],
+    "developer_fix_running": ["main_integration_check", "blocked"],
+    "main_fixing": ["main_integration_check", "blocked"],
+    "accepted": ["final_delivery"],
+    "blocked": ["final_delivery"],
+    "final_delivery": [],
+}
+
 ALLOWED_STATUS_TRANSITIONS = {
-    "init": {"manager_work_order", "blocked"},
-    "manager_work_order": {"developer_running", "blocked"},
-    "developer_running": {"developer_done", "blocked"},
-    "developer_done": {"main_integration_check", "blocked"},
-    "main_integration_check": {"reviewer_running", "blocked"},
-    "reviewer_running": {"review_done", "blocked"},
-    "review_done": {"accepted", "fix_required", "blocked"},
-    "fix_required": {"developer_fix_running", "main_fixing", "blocked"},
-    "developer_fix_running": {"main_integration_check", "blocked"},
-    "main_fixing": {"main_integration_check", "blocked"},
-    "accepted": {"final_delivery"},
-    "blocked": {"final_delivery"},
-    "final_delivery": set(),
+    status: set(next_statuses)
+    for status, next_statuses in ORDERED_STATUS_TRANSITIONS.items()
 }
 
 DIRECT_MANAGER_TARGET = "M"
@@ -82,6 +87,10 @@ def required_route_specs(manager_direct: bool) -> list[tuple[str, str, str, str]
         ("R1", "D1", "blocking findings", "yes"),
         ("R1", target, "accepted or blocked", "n/a"),
     ]
+
+
+def next_allowed_statuses(status: str) -> list[str]:
+    return list(ORDERED_STATUS_TRANSITIONS.get(status, []))
 
 
 def current_run_status(text: str) -> str:

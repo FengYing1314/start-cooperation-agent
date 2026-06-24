@@ -400,7 +400,7 @@ def test_direct_thread_happy_path(root: Path) -> None:
     inspected = json.loads(inspect_run(run_dir).stdout)
     assert inspected["ok"] is True, inspected
     assert inspected["current_status"] == "developer_running", inspected
-    assert inspected["next_allowed_statuses"] == ["blocked", "developer_done"], inspected
+    assert inspected["next_allowed_statuses"] == ["developer_done", "blocked"], inspected
     assert inspected["last_event"]["id"] == "M-002", inspected
 
     jumped_result = script(
@@ -773,6 +773,11 @@ def test_protocol_status_docs_match_contract(root: Path) -> None:
     assert set(contract.ALLOWED_STATUS_TRANSITIONS) == contract.RUN_STATUSES
     transition_targets = set().union(*contract.ALLOWED_STATUS_TRANSITIONS.values())
     assert transition_targets <= contract.RUN_STATUSES, transition_targets - contract.RUN_STATUSES
+    assert set(contract.ORDERED_STATUS_TRANSITIONS) == contract.RUN_STATUSES
+    for status, ordered_targets in contract.ORDERED_STATUS_TRANSITIONS.items():
+        assert len(ordered_targets) == len(set(ordered_targets)), (status, ordered_targets)
+        assert set(ordered_targets) == contract.ALLOWED_STATUS_TRANSITIONS[status], (status, ordered_targets)
+        assert contract.next_allowed_statuses(status) == ordered_targets, (status, ordered_targets)
 
     documented_statuses = fenced_block_after(protocol, "Use these run statuses:")
     assert documented_statuses == contract.RUN_STATUS_ORDER, documented_statuses
@@ -782,6 +787,7 @@ def test_protocol_status_docs_match_contract(root: Path) -> None:
     assert normal_flow == contract.NORMAL_STATUS_FLOW, normal_flow
     for source, target in zip(normal_flow, normal_flow[1:]):
         assert target in contract.ALLOWED_STATUS_TRANSITIONS[source], (source, target)
+        assert contract.next_allowed_statuses(source)[0] == target, (source, target)
 
     fix_flow = status_flow_lines(fenced_block_after(protocol, "Fix flow:"))
     expected_fix_flow = [

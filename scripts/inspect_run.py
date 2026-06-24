@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 
-from start_work_contract import ALLOWED_STATUS_TRANSITIONS, RUN_STATUSES, current_run_status
+from start_work_contract import RUN_STATUSES, current_run_status, next_allowed_statuses
 
 
 def load_json_object(path: Path, problems: list[str]) -> dict[str, object]:
@@ -124,7 +124,7 @@ def inspect_run(run_dir: Path) -> dict[str, object]:
         "current_status": current_status,
         "coordination_status": coordination_status,
         "metadata_status": metadata_status,
-        "next_allowed_statuses": sorted(ALLOWED_STATUS_TRANSITIONS.get(current_status, set())),
+        "next_allowed_statuses": next_allowed_statuses(current_status),
         "event_count": len(events),
         "metadata_event_count": metadata_event_count,
         "last_event": compact_event(last_event),
