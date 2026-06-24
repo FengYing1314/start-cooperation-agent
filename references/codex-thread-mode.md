@@ -43,12 +43,12 @@ SW Team <team-id> R1 Reviewer
 After creating or confirming threads:
 
 1. Record Manager, Developer, and Reviewer targets with `scripts/init_team.py`.
-2. Send `team/standing-developer.md` to Developer.
-3. Send `team/standing-reviewer.md` to Reviewer.
-4. Require both agents to acknowledge the roster.
+2. Send `team/standing-developer.md` directly to Developer with `send_message_to_thread`.
+3. Send `team/standing-reviewer.md` directly to Reviewer with `send_message_to_thread`.
+4. Require both agents to send a direct acknowledgement back to Manager.
 5. Record acknowledgements with `scripts/ack_team.py --role D1` and `scripts/ack_team.py --role R1`.
 
-If the Manager thread id cannot be obtained, record a Manager callback. If neither a Manager thread id nor callback is available, direct agent-to-Manager handoff is disabled and Manager must relay messages.
+Direct `codex-thread` runs require a Manager thread id. If the Manager thread id cannot be obtained, record a Manager callback only for manual relay fallback; do not create a direct `codex-thread` run from a callback-only roster.
 
 ## Roster Rules
 
@@ -58,7 +58,7 @@ Every role must know the same roster:
 - Developer `D1`
 - Reviewer `R1`
 
-The roster must include thread ids for Developer and Reviewer. Manager must have either a thread id or a callback that agents can use to report back.
+The roster must include thread ids for Manager, Developer, and Reviewer before direct `codex-thread` runs. A callback-only Manager target is valid only for manual relay fallback.
 
 If any role thread changes, update the team with `scripts/init_team.py`, send `team/roster-update.md` to all active role threads, and record fresh acknowledgements before continuing work.
 
@@ -66,7 +66,18 @@ If any role thread changes, update the team with `scripts/init_team.py`, send `t
 
 For each task, Manager creates a new run ledger with `scripts/init_run.py`. The script imports the long-lived team roster from `team.json` and refuses to start if `D1` or `R1` has not acknowledged the current roster.
 
-Every outbound prompt should be saved in the run `messages/` directory and recorded in the ledger before or immediately after sending. Large command output belongs in `artifacts/` only when needed.
+Normal transport is direct thread messaging, not Manager reading other agent threads. The sender must send the next handoff to the roster target with `send_message_to_thread`. If Manager must be copied, send a separate message to Manager. If the messaging tool is unavailable, the sender stops and returns the exact unsent payload and target.
+
+Manager outbound prompts should be saved in the run `messages/` directory and recorded in the ledger before or immediately after sending. Developer and Reviewer must not edit Manager-owned ledgers; they include enough message metadata for Manager to record the received handoff.
+
+Manager send sequence:
+
+```text
+1. Write the exact outbound payload from `references/templates.md`.
+2. Record it with `scripts/append_event.py --kind message --actor M --to <role> --body-file <payload>`.
+3. Call `send_message_to_thread` with the recipient thread id from `team.json` and the same payload.
+4. If the send fails, record a blocker event and do not advance to the next run status.
+```
 
 Message payloads must include:
 
@@ -84,15 +95,15 @@ Message payloads must include:
 
 Default route:
 
-1. Manager sends work order to Developer.
-2. Developer completes implementation and hands off to Manager.
+1. Manager sends work order directly to Developer.
+2. Developer completes implementation and sends the completion handoff directly to Manager.
 3. Manager performs diff and check checkpoint.
-4. Manager sends review-ready package to Reviewer.
-5. Reviewer accepts, blocks, or sends blocking fix handoff to Developer with Manager copied.
-6. Developer fixes and hands off to Manager.
+4. Manager sends the review-ready package directly to Reviewer.
+5. Reviewer accepts or blocks directly to Manager, or sends a blocking fix handoff directly to Developer with a separate Manager copy.
+6. Developer fixes and sends the fix completion directly to Manager.
 7. Manager repeats checkpoint and review until accepted, blocked, or stopped.
 
-Do not use continuous Manager polling as the normal control loop. Manager reads other threads at handoff checkpoints, when a callback is missing, or when the user asks for status.
+Do not use Manager polling as the normal control loop. Manager reads other threads only to recover a missed direct handoff, audit on user request, or investigate a missing callback.
 
 ## Manager Checkpoint
 

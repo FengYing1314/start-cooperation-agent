@@ -29,9 +29,9 @@ Acknowledgements Complete: <true-or-false>
 
 | From | To | Trigger | Manager Copy |
 | --- | --- | --- | --- |
-| M | D1 | work order ready | yes |
+| M | D1 | work order ready | n/a |
 | D1 | M | implementation ready | n/a |
-| M | R1 | review-ready package | yes |
+| M | R1 | review-ready package | n/a |
 | R1 | D1 | blocking findings | yes |
 | R1 | M | accepted or blocked | n/a |
 
@@ -71,11 +71,13 @@ Standing rules:
 - Read project instructions before editing.
 - Implement only assigned work orders.
 - Stay inside assigned ownership.
+- Send handoffs directly to the roster target thread; do not wait for Manager to read your thread.
 - Do not edit Manager-owned ledger files unless explicitly assigned.
 - Do not revert unrelated changes.
 - Do not stage, commit, push, or rewrite history unless the user explicitly asks.
 - If any thread id changes, wait for a roster update before sending handoffs.
-- When implementation or fixes are ready, send a completion handoff to Manager.
+- When implementation or fixes are ready, send a completion handoff directly to Manager.
+- If direct thread messaging is unavailable, end with the exact handoff payload and target.
 
 Reply exactly:
 ACK roster saved for D1, team <team-id>.
@@ -110,9 +112,11 @@ Standing rules:
 - Stay read-only unless Manager explicitly changes your role.
 - Review only after Manager sends or authorizes a review-ready package.
 - Prioritize correctness, regressions, project-rule violations, missing checks, and scope drift.
-- Send blocking fix handoffs to Developer and include Manager in the status copy.
-- Send accepted or blocked status to Manager.
+- Send blocking fix handoffs directly to Developer and send a separate Manager copy.
+- Send accepted or blocked status directly to Manager.
+- Do not wait for Manager to read your thread as the normal handoff path.
 - If any thread id changes, wait for a roster update before sending handoffs.
+- If direct thread messaging is unavailable, end with the exact handoff payload and target.
 
 Reply exactly:
 ACK roster saved for R1, team <team-id>.
@@ -148,7 +152,7 @@ Current roster:
 - D1: Developer, thread_id=<developer-thread-id>
 - R1: Reviewer, thread_id=<reviewer-thread-id>
 
-Use this roster for all future handoffs. Acknowledge before continuing task work.
+Use this roster for all future handoffs. Direct codex-thread tasks require an actual Manager thread id; callback-only Manager targets require manual relay. Acknowledge before continuing task work.
 ```
 
 After sending a roster update, record fresh D1 and R1 acknowledgements with `scripts/ack_team.py` before creating or continuing task runs.
@@ -265,7 +269,8 @@ Rules:
 - Do not revert unrelated changes.
 - Do not stage, commit, push, or rewrite history unless explicitly requested.
 - Stop and report if scope must expand.
-- When ready, send a completion handoff to Manager.
+- When ready, send a completion handoff directly to Manager using the roster target.
+- Do not wait for Manager to inspect your thread as the normal delivery path.
 - If thread messaging is unavailable, end with the exact handoff payload and target.
 
 Developer response format:
@@ -342,7 +347,9 @@ Reviewer rules:
 - Stay read-only.
 - Review integrated repository state.
 - Report evidence-backed blocking issues first.
-- If blocking fixes are required, send a fix handoff to D1 and include Manager in the status copy.
+- If blocking fixes are required, send a fix handoff directly to D1 and send a separate Manager copy.
+- If accepted or blocked, send the result directly to Manager.
+- Do not wait for Manager to inspect your thread as the normal delivery path.
 - Do not final-accept unless this Manager checkpoint is sufficient.
 
 Reviewer report format:

@@ -113,42 +113,42 @@ def ack_complete(team: dict[str, object]) -> bool:
 
 
 def build_route(manager_direct: bool) -> list[dict[str, str]]:
-    manager_target = "M" if manager_direct else "M via recorded callback"
+    manager_target = "M" if manager_direct else "M via recorded callback (manual relay)"
     return [
         {
             "from": "M",
             "to": "D1",
             "trigger": "work order ready",
-            "manager_copy": "yes",
-            "notes": "Manager starts implementation.",
+            "manager_copy": "n/a",
+            "notes": "Manager sends the work order directly to Developer.",
         },
         {
             "from": "D1",
             "to": manager_target,
             "trigger": "implementation ready",
             "manager_copy": "n/a",
-            "notes": "Manager performs integration check before review.",
+            "notes": "Developer sends completion directly to Manager for integration check.",
         },
         {
             "from": "M",
             "to": "R1",
             "trigger": "review-ready package",
-            "manager_copy": "yes",
-            "notes": "Reviewer starts acceptance review.",
+            "manager_copy": "n/a",
+            "notes": "Manager sends the review package directly to Reviewer.",
         },
         {
             "from": "R1",
             "to": "D1",
             "trigger": "blocking findings",
             "manager_copy": "yes",
-            "notes": "Developer fixes only blocking issues.",
+            "notes": "Reviewer sends fix request directly to Developer and sends Manager a separate copy.",
         },
         {
             "from": "R1",
             "to": manager_target,
             "trigger": "accepted or blocked",
             "manager_copy": "n/a",
-            "notes": "Manager prepares final delivery or escalation.",
+            "notes": "Reviewer sends accepted or blocked status directly to Manager.",
         },
     ]
 
@@ -237,17 +237,39 @@ def standing_instruction(team: dict[str, object], target: str) -> str:
         for item in route
         if isinstance(item, dict)
     )
+    manager_direct = bool(team.get("manager_direct_handoff"))
 
-    if target == "D1":
+    if target == "D1" and manager_direct:
         role_rules = """- Implement only assigned work orders.
 - Stay inside assigned ownership.
-- Send completion handoffs to Manager after implementation or fixes are ready.
+- Send completion handoffs directly to Manager after implementation or fixes are ready.
 - If Reviewer sends blocking findings, fix only those findings unless Manager expands scope."""
+    elif target == "D1":
+        role_rules = """- Implement only assigned work orders.
+- Stay inside assigned ownership.
+- Prepare completion handoffs for Manager through the recorded callback or manual relay.
+- If Reviewer sends blocking findings, fix only those findings unless Manager expands scope."""
+    elif manager_direct:
+        role_rules = """- Review integrated repository state only after Manager sends or authorizes a review-ready package.
+- Stay read-only unless Manager explicitly changes your role.
+- Send blocking fix handoffs directly to Developer and send Manager a separate status copy.
+- Send accepted or blocked status directly to Manager."""
     else:
         role_rules = """- Review integrated repository state only after Manager sends or authorizes a review-ready package.
 - Stay read-only unless Manager explicitly changes your role.
-- Send blocking fix handoffs to Developer and status copies to Manager.
-- Send accepted or blocked status to Manager."""
+- Send blocking fix handoffs directly to Developer and prepare the Manager copy through callback or manual relay.
+- Prepare accepted or blocked status for Manager through the recorded callback or manual relay."""
+
+    if manager_direct:
+        transport_rules = """- Send handoffs directly to the roster target thread with the available thread messaging tool.
+- If thread messaging tools are not visible, call tool_search for Codex app thread send message tools.
+- Do not wait for Manager to read your thread as the normal communication path.
+- If direct thread messaging is unavailable, end with the exact handoff payload and target."""
+    else:
+        transport_rules = """- Manager has no thread_id in this roster; this team cannot run direct codex-thread tasks until Manager supplies one.
+- For handoffs to Manager, use the recorded callback only if it is an actual user-approved messaging route.
+- If the callback is not directly callable, end with the exact handoff payload and target for manual relay.
+- Do not wait for Manager to read your thread as the normal communication path."""
 
     return f"""You are {target} ({target_role}) in start-work team {team["team_id"]}.
 
@@ -271,6 +293,7 @@ Global rules:
 - Do not revert unrelated changes.
 - Do not stage, commit, push, or rewrite history unless the user explicitly asks.
 - Do not edit Manager-owned ledger files.
+{transport_rules}
 - If any thread id changes, wait for a roster update before sending handoffs.
 - Reply with: ACK roster saved for {target}, team {team["team_id"]}.
 """
@@ -298,7 +321,10 @@ Use this roster for all future handoffs. Acknowledge after updating your local c
 
 
 def update_team(existing: dict[str, object] | None, args: argparse.Namespace, repo: Path, now: str) -> tuple[dict[str, object], list[str]]:
-    team_id = slugify(args.team_id or repo.name or "team", fallback="team")
+    existing_team_id = ""
+    if existing and isinstance(existing.get("team_id"), str):
+        existing_team_id = str(existing["team_id"]).strip()
+    team_id = slugify(args.team_id or existing_team_id or repo.name or "team", fallback="team")
     team = existing or {
         "schema_version": 1,
         "team_id": team_id,
@@ -386,7 +412,7 @@ def update_team(existing: dict[str, object] | None, args: argparse.Namespace, re
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=".", help="Repository root or any path inside it.")
-    parser.add_argument("--team-id", default="", help="Stable team id. Defaults to the repo name.")
+    parser.add_argument("--team-id", default="", help="Stable team id. Defaults to the existing team id, then the repo name.")
     parser.add_argument("--manager-thread-id", default=None, help="Current Manager thread id, when available.")
     parser.add_argument("--manager-callback", default=None, help="Fallback target for Manager handoffs when thread id is unavailable.")
     parser.add_argument("--developer-thread-id", default=None, help="Long-lived Developer thread id.")

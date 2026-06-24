@@ -30,8 +30,8 @@ Initialize the team once per project:
 ```text
 Manager creates or confirms long-lived Developer and Reviewer threads.
 Manager records Manager, Developer, and Reviewer targets in team.json.
-Manager sends standing instructions to Developer and Reviewer.
-Developer and Reviewer acknowledge the roster.
+Manager sends standing instructions directly to Developer and Reviewer.
+Developer and Reviewer send roster acknowledgements back to Manager.
 ```
 
 Use `scripts/init_team.py` for the team registry. The script is idempotent and writes:
@@ -53,7 +53,7 @@ Required roster entries:
 - `D1`: long-lived Developer thread id.
 - `R1`: long-lived Reviewer thread id.
 
-If Manager has no stable thread id, record a callback. When neither thread id nor callback exists, direct agent-to-Manager handoff is disabled and Manager must relay messages manually.
+Direct `codex-thread` mode requires `M.thread_id`. If Manager has no stable thread id, record a callback only for manual relay fallback. When neither thread id nor callback exists, agent-to-Manager handoff is disabled.
 
 Do not create new Developer or Reviewer threads for each task. Replace a thread only when it is unavailable, contaminated, or intentionally retired. After replacement, run `init_team.py` again, broadcast `roster-update.md`, and record fresh acknowledgements before more handoffs.
 
@@ -71,7 +71,7 @@ Each task gets a run ledger:
   snapshots/
 ```
 
-Use `scripts/init_run.py` to create a run. It must read `team/team.json`; if the team is missing, incomplete, or unacknowledged, it must fail with a clear instruction to initialize or acknowledge the team first.
+Use `scripts/init_run.py` to create a run. It must read `team/team.json`; if the team is missing, incomplete, unacknowledged, or lacks `M.thread_id` for `codex-thread` direct mode, it must fail with a clear instruction to initialize or acknowledge the team first.
 
 The default ignore rule is `/.agent-work/` in `.git/info/exclude`, not `.gitignore`.
 
@@ -121,27 +121,38 @@ review_done
 
 Use `scripts/append_event.py --run-status <status>` to advance status and append the event together.
 
-## Event-Driven Handoffs
+## Event-Driven Direct Handoffs
+
+Normal communication is sender-pushed, role-to-role messaging. The sender uses the roster target and the available thread messaging tool, such as `send_message_to_thread`, to deliver the next handoff. Do not make Manager inspect another role thread as the normal way to collect results. Callback-only Manager targets are manual relay fallback and are not valid for direct `codex-thread` runs.
 
 Default route:
 
 ```text
-Manager -> Developer: work order ready
-Developer -> Manager: implementation ready
-Manager -> Reviewer: review-ready package after integration check
-Reviewer -> Developer: blocking fix request, with Manager copied
-Reviewer -> Manager: accepted or blocked status
-Developer -> Manager: fix ready
+Manager -> Developer: direct work order message
+Developer -> Manager: direct implementation-ready message
+Manager -> Reviewer: direct review-ready message after integration check
+Reviewer -> Developer: direct blocking fix request, plus separate Manager copy
+Reviewer -> Manager: direct accepted or blocked status
+Developer -> Manager: direct fix-ready message
 ```
 
 Manager does not repeatedly poll other threads. Use `read_thread` only:
 
-- at a handoff checkpoint;
-- when preparing the next handoff package;
+- to recover a missed direct handoff;
+- to audit a thread after a user request;
 - when the user asks for status;
 - when an expected callback is missing after an agreed wait.
 
-Reviewer-to-Developer fix handoffs are allowed only for blocking findings inside the assigned scope and must copy Manager. Scope expansion, architecture decisions, or accepted residual risk must go to Manager.
+Reviewer-to-Developer fix handoffs are allowed only for blocking findings inside the assigned scope and must copy Manager by sending Manager a separate status message. Scope expansion, architecture decisions, or accepted residual risk must go to Manager.
+
+Direct send sequence:
+
+```text
+1. Compose the handoff payload from the matching template.
+2. Record the outbound payload with append_event.py, or record the received handoff as soon as it arrives.
+3. Send the same payload to the roster target with send_message_to_thread.
+4. If sending fails, record a blocker event with the unsent target and payload location.
+```
 
 ## Message Ids
 
@@ -153,7 +164,7 @@ D1-001      Developer work order or handoff
 R1-001      Reviewer review or fix handoff
 ```
 
-Write outbound prompts to `messages/<msg-id>-<slug>.md`. Write summaries, review reports, and copied check output to `artifacts/`.
+Manager writes outbound prompts to `messages/<msg-id>-<slug>.md`. Developer and Reviewer do not edit the Manager-owned ledger; their direct messages must include local message id, sender, receiver, run id, status, summary, checks, and requested next action so Manager can record the received handoff.
 
 `append_event.py` must reject duplicate ids rather than overwrite payload files.
 

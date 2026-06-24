@@ -139,7 +139,7 @@ def load_team(repo: Path) -> tuple[dict[str, object], Path]:
     return team, team_path
 
 
-def validate_team(team: dict[str, object], repo: Path, team_path: Path) -> None:
+def validate_team(team: dict[str, object], repo: Path, team_path: Path, mode: str) -> None:
     if str(team.get("repo", "")) != str(repo):
         raise SystemExit(f"Team repo does not match current repo in {team_path}")
 
@@ -162,6 +162,15 @@ def validate_team(team: dict[str, object], repo: Path, team_path: Path) -> None:
         raise SystemExit(
             f"Start-work team roster is incomplete in {team_path}: {', '.join(missing)}. "
             "Update it with scripts/init_team.py before creating a run."
+        )
+
+    manager_entry = roster.get("M", {})
+    manager_thread = str(manager_entry.get("thread_id", "")) if isinstance(manager_entry, dict) else ""
+    if mode == "codex-thread" and not manager_thread:
+        raise SystemExit(
+            f"Start-work direct codex-thread mode requires M.thread_id in {team_path}. "
+            "Callback-only Manager targets require manual relay and must not be used for direct role-to-role runs. "
+            "Update the roster with scripts/init_team.py --manager-thread-id <manager-thread-id>."
         )
 
     acknowledgements = team.get("acknowledgements")
@@ -331,7 +340,7 @@ def main() -> int:
 
     repo, is_git_repo = resolve_repo(args.repo)
     team, team_path = load_team(repo)
-    validate_team(team, repo, team_path)
+    validate_team(team, repo, team_path, args.mode)
     request = read_request(args)
     now = dt.datetime.now().astimezone().replace(microsecond=0)
     run_id = args.run_id.strip()

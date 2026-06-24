@@ -8,8 +8,8 @@
 
 - 需要 Manager / Developer / Reviewer 分工协作的软件开发任务。
 - 希望每个项目只初始化一组长期 Agent 会话，而不是每个任务重复创建线程。
-- 希望 Developer 完成后主动交回 Manager，Manager 检查后再交 Reviewer。
-- 希望 Reviewer 发现阻断问题时能发回 Developer，同时抄送 Manager。
+- 希望 Developer 完成后直接发消息交回 Manager，Manager 检查后再直接发给 Reviewer。
+- 希望 Reviewer 发现阻断问题时能直接发回 Developer，同时单独抄送 Manager。
 - 希望把协作状态、消息、验收结论保存在项目本地，但不污染 Git 提交。
 
 小任务不一定需要启用完整流程，Manager 可以直接处理。
@@ -28,7 +28,7 @@
   -> 无阻断问题后交付
 ```
 
-该流程是事件驱动的：默认不要求 Manager 持续轮询其他线程，而是由当前阶段的 Agent 在完成后主动发送 handoff。
+该流程是事件驱动的：默认不要求 Manager 持续轮询其他线程，而是由当前阶段的 Agent 在完成后主动用线程消息发送 handoff。直接 `codex-thread` 模式要求 Manager / Developer / Reviewer 都有真实 thread id；只有 Manager callback 时只能作为手动 relay fallback。
 
 ## 项目级长期团队
 
@@ -100,7 +100,7 @@ python3 <skill-dir>/scripts/init_team.py --repo <repo-root> \
   --project-doc AGENTS.md
 ```
 
-如果 Manager 没有稳定 thread id，可以使用 callback：
+如果 Manager 没有稳定 thread id，可以记录 callback 作为手动 relay fallback，但不能用于直接 `codex-thread` run：
 
 ```bash
 python3 <skill-dir>/scripts/init_team.py --repo <repo-root> \
@@ -134,7 +134,7 @@ python3 <skill-dir>/scripts/init_run.py --repo <repo-root> --slug <work-slug> --
 `init_run.py` 会强制检查：
 
 - team 已初始化；
-- Manager / Developer / Reviewer 目标完整；
+- direct `codex-thread` 模式下 Manager / Developer / Reviewer 都有 thread id；
 - D1 和 R1 已确认当前 roster；
 - run ledger 已创建；
 - `.agent-work/` 已加入本地 Git exclude。
@@ -193,7 +193,8 @@ start-work/
 基础校验：
 
 ```bash
-python3 -m py_compile scripts/init_team.py scripts/ack_team.py scripts/init_run.py scripts/append_event.py
+python3 -m py_compile scripts/init_team.py scripts/ack_team.py scripts/init_run.py scripts/append_event.py scripts/test_start_work.py
+python3 scripts/test_start_work.py
 python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
 ```
 
@@ -201,6 +202,7 @@ python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
 
 - 未初始化 team 时 `init_run.py` 会失败。
 - 未记录 D1 / R1 ack 时 `init_run.py` 会失败。
+- callback-only Manager 在 direct `codex-thread` 模式下 `init_run.py` 会失败。
 - roster 更新后必须重新 ack。
 - run ledger 能继承最新 team roster。
 - `append_event.py --run-status` 能推进任务状态。
