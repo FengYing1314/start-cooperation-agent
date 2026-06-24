@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -20,6 +21,18 @@ INSPECT_RUN = SCRIPT_DIR / "inspect_run.py"
 INSPECT_PROJECT = SCRIPT_DIR / "inspect_project.py"
 START_WORK_CONTRACT = SCRIPT_DIR / "start_work_contract.py"
 SKILL_ROOT = SCRIPT_DIR.parent
+
+
+def import_contract_module():
+    sys.path.insert(0, str(SCRIPT_DIR))
+    try:
+        import start_work_contract
+    finally:
+        try:
+            sys.path.remove(str(SCRIPT_DIR))
+        except ValueError:
+            pass
+    return start_work_contract
 
 
 def run(command: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -717,13 +730,13 @@ def test_shared_contract_matches_generated_routes(root: Path) -> None:
 
     sys.path.insert(0, str(SCRIPT_DIR))
     try:
-        import start_work_contract
         import init_team as init_team_script
     finally:
         try:
             sys.path.remove(str(SCRIPT_DIR))
         except ValueError:
             pass
+    start_work_contract = import_contract_module()
 
     direct_route = init_team_script.build_route(True)
     direct_specs = [
@@ -742,6 +755,49 @@ def test_shared_contract_matches_generated_routes(root: Path) -> None:
     assert relay_route[1]["to"] == start_work_contract.MANUAL_RELAY_MANAGER_TARGET, relay_route
 
 
+def fenced_block_after(text: str, marker: str) -> list[str]:
+    pattern = re.compile(rf"{re.escape(marker)}\s*```text\n(.*?)\n```", flags=re.DOTALL)
+    match = pattern.search(text)
+    assert match, marker
+    return [line.strip() for line in match.group(1).splitlines() if line.strip()]
+
+
+def status_flow_lines(block: list[str]) -> list[str]:
+    return [line.removeprefix("-> ").strip() for line in block]
+
+
+def test_protocol_status_docs_match_contract(root: Path) -> None:
+    contract = import_contract_module()
+    protocol = (SKILL_ROOT / "references" / "protocol.md").read_text(encoding="utf-8")
+
+    assert set(contract.ALLOWED_STATUS_TRANSITIONS) == contract.RUN_STATUSES
+    transition_targets = set().union(*contract.ALLOWED_STATUS_TRANSITIONS.values())
+    assert transition_targets <= contract.RUN_STATUSES, transition_targets - contract.RUN_STATUSES
+
+    documented_statuses = fenced_block_after(protocol, "Use these run statuses:")
+    assert documented_statuses == contract.RUN_STATUS_ORDER, documented_statuses
+    assert set(documented_statuses) == contract.RUN_STATUSES, documented_statuses
+
+    normal_flow = status_flow_lines(fenced_block_after(protocol, "Normal flow:"))
+    assert normal_flow == contract.NORMAL_STATUS_FLOW, normal_flow
+    for source, target in zip(normal_flow, normal_flow[1:]):
+        assert target in contract.ALLOWED_STATUS_TRANSITIONS[source], (source, target)
+
+    fix_flow = status_flow_lines(fenced_block_after(protocol, "Fix flow:"))
+    expected_fix_flow = [
+        item if isinstance(item, str) else " or ".join(item)
+        for item in contract.FIX_STATUS_FLOW
+    ]
+    assert fix_flow == expected_fix_flow, fix_flow
+    assert "fix_required" in contract.ALLOWED_STATUS_TRANSITIONS["review_done"]
+    assert {"developer_fix_running", "main_fixing"} <= contract.ALLOWED_STATUS_TRANSITIONS["fix_required"]
+    assert "main_integration_check" in contract.ALLOWED_STATUS_TRANSITIONS["developer_fix_running"]
+    assert "main_integration_check" in contract.ALLOWED_STATUS_TRANSITIONS["main_fixing"]
+
+    for status in sorted(contract.DIRECT_SEND_STATUSES):
+        assert status in protocol, status
+
+
 def main() -> int:
     tests = [
         test_team_id_is_stable,
@@ -756,6 +812,7 @@ def main() -> int:
         test_fallback_mode_requires_reason,
         test_reference_routing_is_progressive,
         test_shared_contract_matches_generated_routes,
+        test_protocol_status_docs_match_contract,
     ]
     with tempfile.TemporaryDirectory(prefix="start-work-tests-") as temp:
         root = Path(temp)

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import re
 
-RUN_STATUSES = {
+RUN_STATUS_ORDER = [
     "init",
     "manager_work_order",
     "developer_running",
@@ -19,7 +19,29 @@ RUN_STATUSES = {
     "accepted",
     "blocked",
     "final_delivery",
-}
+]
+
+RUN_STATUSES = set(RUN_STATUS_ORDER)
+
+NORMAL_STATUS_FLOW = [
+    "init",
+    "manager_work_order",
+    "developer_running",
+    "developer_done",
+    "main_integration_check",
+    "reviewer_running",
+    "review_done",
+    "accepted",
+    "final_delivery",
+]
+
+FIX_STATUS_FLOW = [
+    "review_done",
+    "fix_required",
+    ("developer_fix_running", "main_fixing"),
+    "main_integration_check",
+    "reviewer_running",
+]
 
 DIRECT_SEND_STATUSES = {
     "developer_running",
