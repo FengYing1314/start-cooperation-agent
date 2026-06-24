@@ -128,10 +128,30 @@ def write_start_snapshots(run_dir: Path, git_info: dict[str, str], overwrite: bo
     return True
 
 
-def load_team(repo: Path) -> tuple[dict[str, object], Path]:
-    team_path = repo / ".agent-work" / "start-work" / "team" / "team.json"
+def team_path_for(repo: Path) -> Path:
+    return repo / ".agent-work" / "start-work" / "team" / "team.json"
+
+
+def fallback_team(repo: Path) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "team_id": f"fallback-{slugify(repo.name, fallback='team')}",
+        "repo": str(repo),
+        "project_docs": [],
+        "roster": {
+            "M": {"role": "Manager", "thread_id": "", "callback": "", "status": "fallback"},
+            "D1": {"role": "Developer", "thread_id": "", "callback": "", "status": "fallback"},
+            "R1": {"role": "Reviewer", "thread_id": "", "callback": "", "status": "fallback"},
+        },
+        "handoff_route": [],
+        "manager_direct_handoff": False,
+    }
+
+
+def load_team(repo: Path, *, required: bool) -> tuple[dict[str, object] | None, Path]:
+    team_path = team_path_for(repo)
     team = load_json(team_path)
-    if team is None:
+    if team is None and required:
         raise SystemExit(
             f"Start-work team is not initialized: {team_path}. "
             "Run scripts/init_team.py and record Manager, Developer, and Reviewer targets first."
@@ -199,6 +219,14 @@ def validate_team(team: dict[str, object], repo: Path, team_path: Path, mode: st
         )
 
 
+def validate_fallback_team(team: dict[str, object], repo: Path, team_path: Path) -> None:
+    team_repo = str(team.get("repo", ""))
+    if team_repo and team_repo != str(repo):
+        raise SystemExit(f"Team repo does not match current repo in {team_path}")
+    if "roster" in team and not isinstance(team.get("roster"), dict):
+        raise SystemExit(f"team.json roster must be an object: {team_path}")
+
+
 def roster_row(team: dict[str, object], local_id: str) -> str:
     roster = team.get("roster", {})
     entry = roster.get(local_id, {}) if isinstance(roster, dict) else {}
@@ -238,6 +266,7 @@ def coordination_template(
     git_info: dict[str, str],
     team: dict[str, object],
     team_path: Path,
+    fallback_reason: str,
 ) -> str:
     return f"""# Start Work Coordination
 
@@ -252,6 +281,7 @@ Base HEAD: {git_info["head"]}
 Team ID: {team.get("team_id", "")}
 Team Registry: {team_path}
 Manager Direct Handoff: {team.get("manager_direct_handoff", False)}
+Fallback Reason: {fallback_reason}
 
 ## User Request
 
@@ -331,6 +361,11 @@ def main() -> int:
         help="Collaboration mode to record in the ledger.",
     )
     parser.add_argument(
+        "--fallback-reason",
+        default="",
+        help="Required when --mode is subagent or single-agent; records why codex-thread mode was not used.",
+    )
+    parser.add_argument(
         "--refresh-snapshot",
         action="store_true",
         help="Overwrite existing start git snapshots for this run.",
@@ -339,8 +374,16 @@ def main() -> int:
     args = parser.parse_args()
 
     repo, is_git_repo = resolve_repo(args.repo)
-    team, team_path = load_team(repo)
-    validate_team(team, repo, team_path, args.mode)
+    fallback_reason = args.fallback_reason.strip()
+    if args.mode != "codex-thread" and not fallback_reason:
+        raise SystemExit("--fallback-reason is required when --mode is subagent or single-agent.")
+    team, team_path = load_team(repo, required=args.mode == "codex-thread")
+    if team is None:
+        team = fallback_team(repo)
+    if args.mode == "codex-thread":
+        validate_team(team, repo, team_path, args.mode)
+    else:
+        validate_fallback_team(team, repo, team_path)
     request = read_request(args)
     now = dt.datetime.now().astimezone().replace(microsecond=0)
     run_id = args.run_id.strip()
@@ -375,6 +418,7 @@ def main() -> int:
                 git_info=git_info,
                 team=team,
                 team_path=team_path,
+                fallback_reason=fallback_reason,
             ),
             encoding="utf-8",
         )
@@ -399,6 +443,7 @@ def main() -> int:
             "manager_direct_handoff": team.get("manager_direct_handoff", False),
             "roster": team.get("roster", {}),
         },
+        "fallback_reason": fallback_reason,
     }
     metadata_path = run_dir / "run.json"
     stored_metadata = load_json(metadata_path)
@@ -408,7 +453,8 @@ def main() -> int:
         metadata_created = True
         stored_metadata = metadata
 
-    mark_team_used(team_path, team, now.isoformat())
+    if team_path.exists():
+        mark_team_used(team_path, team, now.isoformat())
 
     result = {
         **stored_metadata,

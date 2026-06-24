@@ -173,6 +173,7 @@ Base HEAD:
 Team ID:
 Team Registry:
 Manager Direct Handoff:
+Fallback Reason:
 
 ## User Request
 
@@ -230,6 +231,8 @@ Results:
 ```
 
 Update `Status:` through `scripts/append_event.py --run-status <status>` when recording state transitions.
+
+For direct thread sends, record the outbound payload first, call `send_message_to_thread`, then append a status event such as `developer_running`, `reviewer_running`, or `developer_fix_running` only after the send succeeds.
 
 ## Manager Work Order
 

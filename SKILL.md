@@ -66,9 +66,9 @@ python3 <skill-dir>/scripts/init_run.py --repo <repo-root> --slug <work-slug> --
 This command fails in direct `codex-thread` mode when the roster has only a Manager callback. Update the team with `--manager-thread-id` before using direct thread handoffs.
 
 2. Manager writes the work order with goal, non-goals, ownership, acceptance criteria, and checks.
-3. Manager records the outbound work order in the run ledger, then sends it directly to Developer with `send_message_to_thread`.
+3. Manager records the outbound work order in the run ledger, sends it directly to Developer with `send_message_to_thread`, then records `developer_running` after the send succeeds.
 4. Developer implements and sends a completion handoff directly to Manager.
-5. Manager performs the integration checkpoint: inspect diff, run or record checks, then records and sends the review-ready package directly to Reviewer.
+5. Manager performs the integration checkpoint: inspect diff, run or record checks, then records and sends the review-ready package directly to Reviewer, then records `reviewer_running` after the send succeeds.
 6. Reviewer either accepts directly to Manager, or sends blocking fix handoffs directly to Developer with a separate Manager copy.
 7. Developer fixes and sends the fix completion directly to Manager. Repeat until accepted, blocked, or stopped by the user.
 8. Final response includes changes, checks, Reviewer result, risks, and the run ledger path.
@@ -79,7 +79,7 @@ Default to Codex thread mode. Use long-lived Developer and Reviewer threads per 
 
 Do not create new Developer or Reviewer threads for every task. Replace a thread only when the old thread is unavailable, contaminated, or no longer fits the project; then update and broadcast the roster.
 
-Use subagent mode only when the user explicitly asks for subagents, the thread tools are unavailable and the user approves fallback, or the task is too small to justify the long-lived team. Record any fallback reason in the run ledger.
+Use subagent or single-agent mode only when the user explicitly asks for it, thread tools are unavailable and the user approves fallback, or the task is too small to justify the long-lived team. Create those runs with `--mode subagent` or `--mode single-agent` and a required `--fallback-reason`; they can create a ledger without an initialized long-lived team.
 
 For tiny tasks, explain that start-work overhead is unnecessary and handle the task directly unless the user still wants the full workflow.
 
@@ -92,4 +92,4 @@ python3 -m py_compile scripts/init_team.py scripts/ack_team.py scripts/init_run.
 python3 scripts/test_start_work.py
 ```
 
-These checks cover stable team ids, callback-only rejection for direct `codex-thread` mode, run creation, and event recording.
+These checks cover stable team ids, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, send-state progression, and event recording.

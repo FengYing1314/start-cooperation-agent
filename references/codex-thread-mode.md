@@ -50,6 +50,8 @@ After creating or confirming threads:
 
 Direct `codex-thread` runs require a Manager thread id. If the Manager thread id cannot be obtained, record a Manager callback only for manual relay fallback; do not create a direct `codex-thread` run from a callback-only roster.
 
+When falling back because thread tools are unavailable or the task is too small for a long-lived team, create the ledger with `scripts/init_run.py --mode subagent --fallback-reason "<reason>"` or `--mode single-agent --fallback-reason "<reason>"`.
+
 ## Roster Rules
 
 Every role must know the same roster:
@@ -76,7 +78,8 @@ Manager send sequence:
 1. Write the exact outbound payload from `references/templates.md`.
 2. Record it with `scripts/append_event.py --kind message --actor M --to <role> --body-file <payload>`.
 3. Call `send_message_to_thread` with the recipient thread id from `team.json` and the same payload.
-4. If the send fails, record a blocker event and do not advance to the next run status.
+4. If the send succeeds, record the next running status with `scripts/append_event.py --kind status --run-status developer_running` for Developer work, or `--run-status reviewer_running` for Reviewer work.
+5. If the send fails, record a blocker event and do not advance to the next run status.
 ```
 
 Message payloads must include:

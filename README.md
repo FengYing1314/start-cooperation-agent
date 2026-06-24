@@ -28,7 +28,7 @@
   -> 无阻断问题后交付
 ```
 
-该流程是事件驱动的：默认不要求 Manager 持续轮询其他线程，而是由当前阶段的 Agent 在完成后主动用线程消息发送 handoff。直接 `codex-thread` 模式要求 Manager / Developer / Reviewer 都有真实 thread id；只有 Manager callback 时只能作为手动 relay fallback。
+该流程是事件驱动的：默认不要求 Manager 持续轮询其他线程，而是由当前阶段的 Agent 在完成后主动用线程消息发送 handoff。直接 `codex-thread` 模式要求 Manager / Developer / Reviewer 都有真实 thread id；只有 Manager callback 时只能作为手动 relay fallback。线程不可用或任务太小时，可以用 `--mode subagent` 或 `--mode single-agent`，但必须记录 `--fallback-reason`。
 
 ## 项目级长期团队
 
@@ -139,6 +139,16 @@ python3 <skill-dir>/scripts/init_run.py --repo <repo-root> --slug <work-slug> --
 - run ledger 已创建；
 - `.agent-work/` 已加入本地 Git exclude。
 
+fallback 模式可以不依赖已初始化 team：
+
+```bash
+python3 <skill-dir>/scripts/init_run.py --repo <repo-root> \
+  --mode subagent \
+  --fallback-reason "thread tools unavailable" \
+  --slug <work-slug> \
+  --request "<用户需求>"
+```
+
 如果任一条件不满足，脚本会失败并给出明确修复提示。
 
 ## 记录事件
@@ -203,6 +213,8 @@ python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
 - 未初始化 team 时 `init_run.py` 会失败。
 - 未记录 D1 / R1 ack 时 `init_run.py` 会失败。
 - callback-only Manager 在 direct `codex-thread` 模式下 `init_run.py` 会失败。
+- `subagent` / `single-agent` fallback 没有 `--fallback-reason` 时会失败。
+- fallback run 能在没有长期 team 的仓库中创建 ledger。
 - roster 更新后必须重新 ack。
 - run ledger 能继承最新 team roster。
 - `append_event.py --run-status` 能推进任务状态。

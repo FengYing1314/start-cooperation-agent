@@ -156,9 +156,74 @@ def test_direct_thread_happy_path(root: Path) -> None:
     event = json.loads(event_result.stdout)
     assert event["id"] == "M-001", event
     assert event["file"].replace("\\", "/") == "messages/M-001-work-order-ready.md", event
+    sent_result = script(
+        APPEND_EVENT,
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        "status",
+        "--actor",
+        "M",
+        "--to",
+        "D1",
+        "--thread-id",
+        "dev-thread",
+        "--summary",
+        "work order sent",
+        "--run-status",
+        "developer_running",
+        "--print-json",
+    )
+    sent = json.loads(sent_result.stdout)
+    assert sent["id"] == "M-002", sent
     coordination = (run_dir / "coordination.md").read_text(encoding="utf-8")
-    assert "Status: manager_work_order" in coordination, coordination
+    assert "Status: developer_running" in coordination, coordination
     assert "Manager sends the work order directly to Developer." in coordination, coordination
+
+
+def test_subagent_fallback_without_team(root: Path) -> None:
+    repo = make_repo(root, "subagent-fallback")
+    proc = script(
+        INIT_RUN,
+        "--repo",
+        str(repo),
+        "--mode",
+        "subagent",
+        "--fallback-reason",
+        "thread tools unavailable",
+        "--slug",
+        "fallback",
+        "--request",
+        "test fallback",
+        "--print-json",
+    )
+    data = json.loads(proc.stdout)
+    assert data["mode"] == "subagent", data
+    assert data["fallback_reason"] == "thread tools unavailable", data
+    run_dir = Path(str(data["run_dir"]))
+    coordination = (run_dir / "coordination.md").read_text(encoding="utf-8")
+    assert "Mode: subagent" in coordination, coordination
+    assert "Fallback Reason: thread tools unavailable" in coordination, coordination
+    assert "fallback-subagent-fallback" in coordination, coordination
+
+
+def test_fallback_mode_requires_reason(root: Path) -> None:
+    repo = make_repo(root, "fallback-reason-required")
+    proc = script(
+        INIT_RUN,
+        "--repo",
+        str(repo),
+        "--mode",
+        "single-agent",
+        "--slug",
+        "fallback",
+        "--request",
+        "test fallback reason",
+        check=False,
+    )
+    combined = proc.stdout + proc.stderr
+    assert proc.returncode != 0, combined
+    assert "--fallback-reason is required" in combined, combined
 
 
 def main() -> int:
@@ -166,6 +231,8 @@ def main() -> int:
         test_team_id_is_stable,
         test_callback_only_rejected_for_direct_thread_mode,
         test_direct_thread_happy_path,
+        test_subagent_fallback_without_team,
+        test_fallback_mode_requires_reason,
     ]
     with tempfile.TemporaryDirectory(prefix="start-work-tests-") as temp:
         root = Path(temp)

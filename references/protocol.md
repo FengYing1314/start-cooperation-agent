@@ -71,7 +71,9 @@ Each task gets a run ledger:
   snapshots/
 ```
 
-Use `scripts/init_run.py` to create a run. It must read `team/team.json`; if the team is missing, incomplete, unacknowledged, or lacks `M.thread_id` for `codex-thread` direct mode, it must fail with a clear instruction to initialize or acknowledge the team first.
+Use `scripts/init_run.py` to create a run. In `codex-thread` mode it must read `team/team.json`; if the team is missing, incomplete, unacknowledged, or lacks `M.thread_id` for direct mode, it must fail with a clear instruction to initialize or acknowledge the team first.
+
+In `subagent` or `single-agent` mode, `init_run.py` can create a run without an initialized team, but `--fallback-reason` is required and must explain why the long-lived thread team is not being used.
 
 The default ignore rule is `/.agent-work/` in `.git/info/exclude`, not `.gitignore`.
 
@@ -151,7 +153,8 @@ Direct send sequence:
 1. Compose the handoff payload from the matching template.
 2. Record the outbound payload with append_event.py, or record the received handoff as soon as it arrives.
 3. Send the same payload to the roster target with send_message_to_thread.
-4. If sending fails, record a blocker event with the unsent target and payload location.
+4. If sending succeeds, append the next running status: `developer_running`, `reviewer_running`, or `developer_fix_running`.
+5. If sending fails, record a blocker event with the unsent target and payload location and do not advance the run status.
 ```
 
 ## Message Ids
