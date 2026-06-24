@@ -1,0 +1,196 @@
+# Start Work Protocol
+
+## Table Of Contents
+
+- Core invariant
+- Team lifecycle
+- Run directory
+- State machine
+- Event-driven handoffs
+- Message ids
+- Ownership
+- Dirty work and conflicts
+- Completion and blockage
+
+## Core Invariant
+
+Start-work has two ledgers:
+
+- Team ledger: one per project, stored in `.agent-work/start-work/team/`.
+- Run ledger: one per task, stored in `.agent-work/start-work/runs/<run-id>/`.
+
+Manager owns both ledgers. Developer and Reviewer do not edit them directly.
+
+The team roster is the source of truth for thread ids and callbacks. Every role must know the same roster before handoffs begin.
+
+## Team Lifecycle
+
+Initialize the team once per project:
+
+```text
+Manager creates or confirms long-lived Developer and Reviewer threads.
+Manager records Manager, Developer, and Reviewer targets in team.json.
+Manager sends standing instructions to Developer and Reviewer.
+Developer and Reviewer acknowledge the roster.
+```
+
+Use `scripts/init_team.py` for the team registry. The script is idempotent and writes:
+
+```text
+<repo>/.agent-work/start-work/team/
+  team.json
+  team.md
+  standing-developer.md
+  standing-reviewer.md
+  roster-update.md    # only when an existing roster changes
+```
+
+Use `scripts/ack_team.py` after Developer and Reviewer reply to standing instructions. A task run must not start until both `D1` and `R1` acknowledgements are recorded.
+
+Required roster entries:
+
+- `M`: Manager thread id or callback.
+- `D1`: long-lived Developer thread id.
+- `R1`: long-lived Reviewer thread id.
+
+If Manager has no stable thread id, record a callback. When neither thread id nor callback exists, direct agent-to-Manager handoff is disabled and Manager must relay messages manually.
+
+Do not create new Developer or Reviewer threads for each task. Replace a thread only when it is unavailable, contaminated, or intentionally retired. After replacement, run `init_team.py` again, broadcast `roster-update.md`, and record fresh acknowledgements before more handoffs.
+
+## Run Directory
+
+Each task gets a run ledger:
+
+```text
+<repo>/.agent-work/start-work/runs/<run-id>/
+  coordination.md
+  run.json
+  events.jsonl
+  messages/
+  artifacts/
+  snapshots/
+```
+
+Use `scripts/init_run.py` to create a run. It must read `team/team.json`; if the team is missing, incomplete, or unacknowledged, it must fail with a clear instruction to initialize or acknowledge the team first.
+
+The default ignore rule is `/.agent-work/` in `.git/info/exclude`, not `.gitignore`.
+
+## State Machine
+
+Use these run statuses:
+
+```text
+init
+manager_work_order
+developer_running
+developer_done
+main_integration_check
+reviewer_running
+review_done
+fix_required
+developer_fix_running
+main_fixing
+accepted
+blocked
+final_delivery
+```
+
+Normal flow:
+
+```text
+init
+-> manager_work_order
+-> developer_running
+-> developer_done
+-> main_integration_check
+-> reviewer_running
+-> review_done
+-> accepted
+-> final_delivery
+```
+
+Fix flow:
+
+```text
+review_done
+-> fix_required
+-> developer_fix_running or main_fixing
+-> main_integration_check
+-> reviewer_running
+```
+
+Use `scripts/append_event.py --run-status <status>` to advance status and append the event together.
+
+## Event-Driven Handoffs
+
+Default route:
+
+```text
+Manager -> Developer: work order ready
+Developer -> Manager: implementation ready
+Manager -> Reviewer: review-ready package after integration check
+Reviewer -> Developer: blocking fix request, with Manager copied
+Reviewer -> Manager: accepted or blocked status
+Developer -> Manager: fix ready
+```
+
+Manager does not repeatedly poll other threads. Use `read_thread` only:
+
+- at a handoff checkpoint;
+- when preparing the next handoff package;
+- when the user asks for status;
+- when an expected callback is missing after an agreed wait.
+
+Reviewer-to-Developer fix handoffs are allowed only for blocking findings inside the assigned scope and must copy Manager. Scope expansion, architecture decisions, or accepted residual risk must go to Manager.
+
+## Message Ids
+
+Use local message ids even when the platform does not expose per-message ids:
+
+```text
+M-001       Manager note or decision
+D1-001      Developer work order or handoff
+R1-001      Reviewer review or fix handoff
+```
+
+Write outbound prompts to `messages/<msg-id>-<slug>.md`. Write summaries, review reports, and copied check output to `artifacts/`.
+
+`append_event.py` must reject duplicate ids rather than overwrite payload files.
+
+## Ownership
+
+Assign ownership before implementation starts:
+
+- One file or module has one writer at a time.
+- Manager does not edit Developer-owned files while Developer is running.
+- Reviewer is read-only unless Manager explicitly assigns a fix role.
+- If two agents need the same file, serialize the work and record the handoff.
+- If the authorized write scope is insufficient, Developer stops and requests expansion.
+
+## Dirty Work And Conflicts
+
+At run start, snapshot:
+
+- `git status --short`
+- current branch
+- current `HEAD`
+- optional diff stat
+
+Treat pre-existing changes as user or other-agent work. Do not revert them unless the user explicitly asks.
+
+If another thread changes an owned file unexpectedly:
+
+1. Stop edits to that file.
+2. Record the conflict in the ledger.
+3. Decide whether to merge manually, reassign ownership, or ask the user.
+
+## Completion And Blockage
+
+The run can complete when:
+
+- no blocking Reviewer findings remain;
+- Manager has inspected the final diff;
+- required checks have passed or failures are explained;
+- final response includes changes, checks, risks, and run ledger path.
+
+Mark the run blocked when the same blocker repeats three cycles and Manager cannot make meaningful progress without user input or external state changes.

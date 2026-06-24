@@ -1,0 +1,4 @@
+interface:
+  display_name: "Start Work"
+  short_description: "Coordinate a reusable multi-agent development team"
+  default_prompt: "Use $start-work to initialize or reuse a project-level Manager, Developer, and Reviewer team with shared thread ids and event-driven handoffs."
