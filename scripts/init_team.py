@@ -114,6 +114,21 @@ def ack_complete(team: dict[str, object]) -> bool:
 
 def build_route(manager_direct: bool) -> list[dict[str, str]]:
     manager_target = "M" if manager_direct else "M via recorded callback (manual relay)"
+    developer_to_manager_note = (
+        "Developer sends completion directly to Manager for integration check."
+        if manager_direct
+        else "Developer prepares completion for Manager through callback/manual relay."
+    )
+    reviewer_fix_note = (
+        "Reviewer sends fix request directly to Developer and sends Manager a separate copy."
+        if manager_direct
+        else "Reviewer sends fix request directly to Developer and prepares Manager copy through callback/manual relay."
+    )
+    reviewer_to_manager_note = (
+        "Reviewer sends accepted or blocked status directly to Manager."
+        if manager_direct
+        else "Reviewer prepares accepted or blocked status for Manager through callback/manual relay."
+    )
     return [
         {
             "from": "M",
@@ -127,7 +142,7 @@ def build_route(manager_direct: bool) -> list[dict[str, str]]:
             "to": manager_target,
             "trigger": "implementation ready",
             "manager_copy": "n/a",
-            "notes": "Developer sends completion directly to Manager for integration check.",
+            "notes": developer_to_manager_note,
         },
         {
             "from": "M",
@@ -141,14 +156,14 @@ def build_route(manager_direct: bool) -> list[dict[str, str]]:
             "to": "D1",
             "trigger": "blocking findings",
             "manager_copy": "yes",
-            "notes": "Reviewer sends fix request directly to Developer and sends Manager a separate copy.",
+            "notes": reviewer_fix_note,
         },
         {
             "from": "R1",
             "to": manager_target,
             "trigger": "accepted or blocked",
             "manager_copy": "n/a",
-            "notes": "Reviewer sends accepted or blocked status directly to Manager.",
+            "notes": reviewer_to_manager_note,
         },
     ]
 

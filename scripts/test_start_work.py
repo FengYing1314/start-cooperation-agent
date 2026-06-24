@@ -106,6 +106,11 @@ def test_callback_only_rejected_for_direct_thread_mode(root: Path) -> None:
     assert "cannot run direct codex-thread tasks" in text, text
     assert "Prepare completion handoffs for Manager" in text, text
 
+    team_doc = (repo / ".agent-work" / "start-work" / "team" / "team.md").read_text(encoding="utf-8")
+    assert "Developer prepares completion for Manager through callback/manual relay." in team_doc, team_doc
+    assert "Reviewer prepares accepted or blocked status for Manager through callback/manual relay." in team_doc, team_doc
+    assert "Developer sends completion directly to Manager" not in team_doc, team_doc
+
 
 def test_direct_thread_happy_path(root: Path) -> None:
     repo = make_repo(root, "direct-happy")
@@ -257,6 +262,11 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "## Transport Rules" in roles, roles
     assert "through the roster target" in roles, roles
     assert "Do not claim a handoff was sent unless a real message was sent" in roles, roles
+
+    openai_yaml = (SKILL_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
+    assert "roster-routed" in openai_yaml, openai_yaml
+    assert "callback/manual relay fallback" in openai_yaml, openai_yaml
+    assert "direct-message development team" not in openai_yaml, openai_yaml
 
 
 def main() -> int:

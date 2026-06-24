@@ -1,4 +1,4 @@
 interface:
   display_name: "Start Work"
-  short_description: "Coordinate a reusable direct-message development team"
-  default_prompt: "Use $start-work to initialize or reuse a project-level Manager, Developer, and Reviewer team with shared thread ids, direct role-to-role thread messages, run ledgers, and review handoffs."
+  short_description: "Coordinate roster-routed dev agents"
+  default_prompt: "Use $start-work to initialize or reuse a project-level Manager, Developer, and Reviewer team with roster-based handoffs, run ledgers, direct thread messages when available, and callback/manual relay fallback."
