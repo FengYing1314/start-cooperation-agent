@@ -17,6 +17,7 @@ INIT_RUN = SCRIPT_DIR / "init_run.py"
 APPEND_EVENT = SCRIPT_DIR / "append_event.py"
 INSPECT_TEAM = SCRIPT_DIR / "inspect_team.py"
 INSPECT_RUN = SCRIPT_DIR / "inspect_run.py"
+INSPECT_PROJECT = SCRIPT_DIR / "inspect_project.py"
 SKILL_ROOT = SCRIPT_DIR.parent
 
 
@@ -87,6 +88,10 @@ def inspect_team(repo: Path, *, check: bool = True) -> subprocess.CompletedProce
     return script(INSPECT_TEAM, "--repo", str(repo), "--print-json", check=check)
 
 
+def inspect_project(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return script(INSPECT_PROJECT, "--repo", str(repo), *args, "--print-json", check=check)
+
+
 def test_team_id_is_stable(root: Path) -> None:
     repo = make_repo(root, "team-id-stable")
     init_team(
@@ -141,6 +146,64 @@ def test_team_inspection_requires_acknowledgements(root: Path) -> None:
     assert ready["codex_thread_ready"] is True, ready
     assert ready["manual_relay_ready"] is False, ready
     assert ready["handoff_route_count"] == 5, ready
+
+
+def test_project_inspection_summarizes_team_and_recent_runs(root: Path) -> None:
+    repo = make_repo(root, "project-inspection")
+    init_team(
+        repo,
+        "--manager-thread-id",
+        "manager-thread",
+        "--developer-thread-id",
+        "dev-thread",
+        "--reviewer-thread-id",
+        "review-thread",
+    )
+    ack(repo, "D1")
+    ack(repo, "R1")
+    first = json.loads(
+        script(
+            INIT_RUN,
+            "--repo",
+            str(repo),
+            "--run-id",
+            "20260101-000001-first",
+            "--request",
+            "first run",
+            "--print-json",
+        ).stdout
+    )
+    second = json.loads(
+        script(
+            INIT_RUN,
+            "--repo",
+            str(repo),
+            "--run-id",
+            "20260101-000002-second",
+            "--request",
+            "second run",
+            "--print-json",
+        ).stdout
+    )
+    append_status(
+        Path(str(second["run_dir"])),
+        actor="M",
+        to="D1",
+        thread_id="dev-thread",
+        run_status="manager_work_order",
+        summary="second work order recorded",
+    )
+
+    summary = json.loads(inspect_project(repo, "--limit", "1").stdout)
+    assert summary["ok"] is True, summary
+    assert summary["team"]["codex_thread_ready"] is True, summary
+    assert summary["run_count"] == 2, summary
+    assert len(summary["latest_runs"]) == 1, summary
+    latest = summary["latest_runs"][0]
+    assert latest["run_id"] == "20260101-000002-second", summary
+    assert latest["current_status"] == "manager_work_order", summary
+    assert latest["event_count"] == 1, summary
+    assert Path(str(first["run_dir"])).exists(), first
 
 
 def test_callback_only_rejected_for_direct_thread_mode(root: Path) -> None:
@@ -562,6 +625,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "templates-final.md" in skill, skill
     assert "inspect_team.py" in skill, skill
     assert "inspect_run.py" in skill, skill
+    assert "inspect_project.py" in skill, skill
     assert "quick_validate.py" in skill, skill
     assert not (SKILL_ROOT / "README.md").exists(), "README.md should not be in the skill package"
     assert "callback/manual relay fallback" in skill, skill
@@ -597,6 +661,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "--allow-status-jump" in protocol, protocol
     assert "inspect_team.py" in protocol, protocol
     assert "inspect_run.py" in protocol, protocol
+    assert "inspect_project.py" in protocol, protocol
     assert "machine-readable run index" in protocol, protocol
     assert "updates `run.json` with the current status and last event" in protocol, protocol
     assert "records both its event status and run status" in protocol, protocol
@@ -612,6 +677,7 @@ def main() -> int:
     tests = [
         test_team_id_is_stable,
         test_team_inspection_requires_acknowledgements,
+        test_project_inspection_summarizes_team_and_recent_runs,
         test_callback_only_rejected_for_direct_thread_mode,
         test_direct_thread_happy_path,
         test_full_fix_review_cycle_status_path,

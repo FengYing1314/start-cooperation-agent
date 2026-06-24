@@ -24,6 +24,8 @@ Manager owns both ledgers. Developer and Reviewer do not edit them directly.
 
 The team roster is the source of truth for thread ids and callbacks. Every role must know the same roster before handoffs begin.
 
+Use `scripts/inspect_project.py --repo <repo-root> --print-json` for a project-level resume snapshot. It combines team readiness and recent run summaries without loading the full ledgers.
+
 ## Team Lifecycle
 
 Initialize the team once per project:

@@ -35,6 +35,12 @@ Load only the reference needed for the next action:
 
 Prefer generated `team/*.md` and run ledger files over hand-writing payloads.
 
+For a project-level resume or audit snapshot, inspect structured state first:
+
+```bash
+python3 <skill-dir>/scripts/inspect_project.py --repo <repo-root> --print-json
+```
+
 ## Initialize Team Once
 
 1. Read the nearest project `AGENTS.md` and project instructions.
@@ -107,9 +113,9 @@ For tiny tasks, explain that start-work overhead is unnecessary and handle the t
 After editing scripts or handoff rules, run:
 
 ```bash
-python3 -m py_compile scripts/init_team.py scripts/ack_team.py scripts/init_run.py scripts/append_event.py scripts/inspect_team.py scripts/inspect_run.py scripts/test_start_work.py
+python3 -m py_compile scripts/init_team.py scripts/ack_team.py scripts/init_run.py scripts/append_event.py scripts/inspect_team.py scripts/inspect_run.py scripts/inspect_project.py scripts/test_start_work.py
 python3 scripts/test_start_work.py
 python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
 ```
 
-These checks cover stable team ids, team readiness inspection, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, progressive reference routing, and skill metadata validity.
+These checks cover stable team ids, team readiness inspection, project status inspection, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, progressive reference routing, and skill metadata validity.
