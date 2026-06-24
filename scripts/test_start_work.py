@@ -672,6 +672,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "templates-work-order.md" in skill, skill
     assert "templates-review.md" in skill, skill
     assert "templates-final.md" in skill, skill
+    assert "trigger-eval-prompts.md" in skill, skill
     assert "inspect_team.py" in skill, skill
     assert "inspect_run.py" in skill, skill
     assert "inspect_project.py" in skill, skill
@@ -725,6 +726,36 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "roster-routed" in openai_yaml, openai_yaml
     assert "callback/manual relay fallback" in openai_yaml, openai_yaml
     assert "direct-message development team" not in openai_yaml, openai_yaml
+
+
+def parse_markdown_table(text: str) -> list[dict[str, str]]:
+    rows = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or "---" in stripped:
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if cells[:4] == ["ID", "Should trigger", "Focus", "Prompt"]:
+            continue
+        if len(cells) == 4:
+            rows.append({"id": cells[0], "should_trigger": cells[1], "focus": cells[2], "prompt": cells[3]})
+    return rows
+
+
+def test_trigger_eval_prompts_are_balanced(root: Path) -> None:
+    prompts_path = SKILL_ROOT / "references" / "trigger-eval-prompts.md"
+    text = prompts_path.read_text(encoding="utf-8")
+    rows = parse_markdown_table(text)
+    assert 6 <= len(rows) <= 12, rows
+    assert len(text.splitlines()) <= 40, text
+
+    should_trigger = {row["should_trigger"] for row in rows}
+    assert should_trigger == {"true", "false"}, rows
+    focuses = {row["focus"] for row in rows}
+    assert {"explicit", "implicit", "contextual", "tiny-task", "skill-authoring"} <= focuses, focuses
+    assert any("$start-work" in row["prompt"] for row in rows if row["should_trigger"] == "true"), rows
+    assert any("No multi-agent workflow needed" in row["prompt"] for row in rows if row["should_trigger"] == "false"), rows
+    assert "Expected behavior:" in text, text
 
 
 def test_shared_contract_matches_generated_routes(root: Path) -> None:
@@ -820,6 +851,7 @@ def main() -> int:
         test_subagent_fallback_without_team,
         test_fallback_mode_requires_reason,
         test_reference_routing_is_progressive,
+        test_trigger_eval_prompts_are_balanced,
         test_shared_contract_matches_generated_routes,
         test_protocol_status_docs_match_contract,
     ]

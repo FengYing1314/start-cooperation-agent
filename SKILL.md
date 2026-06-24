@@ -31,6 +31,7 @@ Load only the reference needed for the next action:
 - `references/templates-work-order.md` for Manager work orders and Developer completion handoffs.
 - `references/templates-review.md` for review requests, blocking fix handoffs, re-review, and acceptance payloads.
 - `references/templates-final.md` for final user summaries.
+- `references/trigger-eval-prompts.md` for forward-testing whether the skill triggers for start-work requests and stays idle for adjacent tasks.
 - `references/templates.md` only when unsure which template file applies; it is an index and contains no payload bodies.
 
 Prefer generated `team/*.md` and run ledger files over hand-writing payloads.
@@ -119,4 +120,4 @@ python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
 
 `validate_start_work.py` compiles every local Python script, including `start_work_contract.py`, runs the smoke tests, and checks git whitespace/conflict markers when the skill is inside a git worktree.
 
-These checks cover stable team ids, team readiness inspection, handoff route invariants, project status inspection, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, contract/documentation drift, progressive reference routing, and skill metadata validity.
+These checks cover stable team ids, team readiness inspection, handoff route invariants, project status inspection, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, trigger-eval prompt coverage, contract/documentation drift, progressive reference routing, and skill metadata validity.
