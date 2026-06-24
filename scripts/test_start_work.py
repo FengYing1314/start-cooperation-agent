@@ -15,6 +15,7 @@ INIT_TEAM = SCRIPT_DIR / "init_team.py"
 ACK_TEAM = SCRIPT_DIR / "ack_team.py"
 INIT_RUN = SCRIPT_DIR / "init_run.py"
 APPEND_EVENT = SCRIPT_DIR / "append_event.py"
+INSPECT_RUN = SCRIPT_DIR / "inspect_run.py"
 SKILL_ROOT = SCRIPT_DIR.parent
 
 
@@ -75,6 +76,10 @@ def append_status(
         args.extend(["--thread-id", thread_id])
     proc = script(APPEND_EVENT, *args)
     return json.loads(proc.stdout)
+
+
+def inspect_run(run_dir: Path, *, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return script(INSPECT_RUN, "--run-dir", str(run_dir), "--print-json", check=check)
 
 
 def test_team_id_is_stable(root: Path) -> None:
@@ -240,6 +245,11 @@ def test_direct_thread_happy_path(root: Path) -> None:
     assert run_metadata["status_event_id"] == "M-002", run_metadata
     assert run_metadata["last_event_id"] == "M-002", run_metadata
     assert run_metadata["event_count"] == 2, run_metadata
+    inspected = json.loads(inspect_run(run_dir).stdout)
+    assert inspected["ok"] is True, inspected
+    assert inspected["current_status"] == "developer_running", inspected
+    assert inspected["next_allowed_statuses"] == ["blocked", "developer_done"], inspected
+    assert inspected["last_event"]["id"] == "M-002", inspected
 
     jumped_result = script(
         APPEND_EVENT,
@@ -334,6 +344,11 @@ def test_full_fix_review_cycle_status_path(root: Path) -> None:
     assert run_metadata["status_event_id"] == "M-007", run_metadata
     assert run_metadata["last_event_id"] == "M-007", run_metadata
     assert run_metadata["event_count"] == len(statuses), run_metadata
+    inspected = json.loads(inspect_run(run_dir).stdout)
+    assert inspected["ok"] is True, inspected
+    assert inspected["current_status"] == "final_delivery", inspected
+    assert inspected["next_allowed_statuses"] == [], inspected
+    assert inspected["event_count"] == len(statuses), inspected
 
 
 def test_run_json_status_mismatch_is_rejected(root: Path) -> None:
@@ -383,6 +398,12 @@ def test_run_json_status_mismatch_is_rejected(root: Path) -> None:
     combined = proc.stdout + proc.stderr
     assert proc.returncode != 0, combined
     assert "Run status mismatch" in combined, combined
+    inspected = inspect_run(run_dir, check=False)
+    inspected_combined = inspected.stdout + inspected.stderr
+    assert inspected.returncode != 0, inspected_combined
+    inspected_data = json.loads(inspected.stdout)
+    assert inspected_data["ok"] is False, inspected_data
+    assert any("Status mismatch" in problem for problem in inspected_data["problems"]), inspected_data
 
 
 def test_subagent_fallback_without_team(root: Path) -> None:
@@ -498,6 +519,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "templates-work-order.md" in skill, skill
     assert "templates-review.md" in skill, skill
     assert "templates-final.md" in skill, skill
+    assert "inspect_run.py" in skill, skill
     assert "quick_validate.py" in skill, skill
     assert not (SKILL_ROOT / "README.md").exists(), "README.md should not be in the skill package"
     assert "callback/manual relay fallback" in skill, skill
@@ -531,6 +553,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "do not claim that a thread message was sent unless one really was" in protocol, protocol
     assert "--allow-fallback-direct-status" in protocol, protocol
     assert "--allow-status-jump" in protocol, protocol
+    assert "inspect_run.py" in protocol, protocol
     assert "machine-readable run index" in protocol, protocol
     assert "updates `run.json` with the current status and last event" in protocol, protocol
     assert "records both its event status and run status" in protocol, protocol

@@ -76,6 +76,8 @@ Use `scripts/init_run.py` to create a run. In `codex-thread` mode it must read `
 
 `run.json` is the machine-readable run index. It must include `current_status`, status update metadata, last event metadata, mode, team roster snapshot, and paths to the ledger files so a later agent can resume without parsing prose first.
 
+Use `scripts/inspect_run.py --run-dir <run-dir> --print-json` before resuming or auditing a run. It reports `ok`, current status, next allowed statuses, last event, and ledger consistency problems.
+
 In `subagent` or `single-agent` mode, `init_run.py` can create a run without an initialized team, but `--fallback-reason` is required and must explain why the long-lived thread team is not being used.
 
 The default ignore rule is `/.agent-work/` in `.git/info/exclude`, not `.gitignore`.

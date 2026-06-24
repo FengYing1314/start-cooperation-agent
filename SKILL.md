@@ -72,13 +72,19 @@ python3 <skill-dir>/scripts/init_run.py --repo <repo-root> --slug <work-slug> --
 
 This command fails in direct `codex-thread` mode when the roster has only a Manager callback. Update the team with `--manager-thread-id` before using direct thread handoffs.
 
-2. Manager writes the work order with goal, non-goals, ownership, acceptance criteria, and checks.
-3. In direct `codex-thread` mode, Manager records the outbound work order in the run ledger, sends it directly to Developer with `send_message_to_thread`, then records `developer_running` after the send succeeds.
-4. Developer implements and returns the completion handoff through the roster target: direct message to Manager in direct mode, or exact payload plus target for callback/manual relay or fallback mode.
-5. Manager performs the integration checkpoint: inspect diff, run or record checks, then records and sends the review-ready package directly to Reviewer in direct mode, then records `reviewer_running` after the send succeeds.
-6. Reviewer either accepts through the roster target, or sends blocking fix handoffs directly to Developer with a separate Manager copy or payload for relay when needed.
-7. Developer fixes and returns the fix completion through the roster target. Repeat until accepted, blocked, or stopped by the user.
-8. Final response includes changes, checks, Reviewer result, risks, and the run ledger path.
+2. To resume or audit an existing run, inspect the structured state first:
+
+```bash
+python3 <skill-dir>/scripts/inspect_run.py --run-dir <run-dir> --print-json
+```
+
+3. Manager writes the work order with goal, non-goals, ownership, acceptance criteria, and checks.
+4. In direct `codex-thread` mode, Manager records the outbound work order in the run ledger, sends it directly to Developer with `send_message_to_thread`, then records `developer_running` after the send succeeds.
+5. Developer implements and returns the completion handoff through the roster target: direct message to Manager in direct mode, or exact payload plus target for callback/manual relay or fallback mode.
+6. Manager performs the integration checkpoint: inspect diff, run or record checks, then records and sends the review-ready package directly to Reviewer in direct mode, then records `reviewer_running` after the send succeeds.
+7. Reviewer either accepts through the roster target, or sends blocking fix handoffs directly to Developer with a separate Manager copy or payload for relay when needed.
+8. Developer fixes and returns the fix completion through the roster target. Repeat until accepted, blocked, or stopped by the user.
+9. Final response includes changes, checks, Reviewer result, risks, and the run ledger path.
 
 ## Mode Selection
 
@@ -95,9 +101,9 @@ For tiny tasks, explain that start-work overhead is unnecessary and handle the t
 After editing scripts or handoff rules, run:
 
 ```bash
-python3 -m py_compile scripts/init_team.py scripts/ack_team.py scripts/init_run.py scripts/append_event.py scripts/test_start_work.py
+python3 -m py_compile scripts/init_team.py scripts/ack_team.py scripts/init_run.py scripts/append_event.py scripts/inspect_run.py scripts/test_start_work.py
 python3 scripts/test_start_work.py
 python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
 ```
 
-These checks cover stable team ids, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, structured run metadata, send-state progression, full fix-review loop progression, event recording, progressive reference routing, and skill metadata validity.
+These checks cover stable team ids, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, progressive reference routing, and skill metadata validity.
