@@ -20,6 +20,7 @@ INSPECT_TEAM = SCRIPT_DIR / "inspect_team.py"
 INSPECT_RUN = SCRIPT_DIR / "inspect_run.py"
 INSPECT_PROJECT = SCRIPT_DIR / "inspect_project.py"
 START_WORK_CONTRACT = SCRIPT_DIR / "start_work_contract.py"
+VALIDATE_START_WORK = SCRIPT_DIR / "validate_start_work.py"
 SKILL_ROOT = SCRIPT_DIR.parent
 
 
@@ -675,6 +676,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "inspect_run.py" in skill, skill
     assert "inspect_project.py" in skill, skill
     assert "start_work_contract.py" in skill, skill
+    assert "validate_start_work.py" in skill, skill
     assert "quick_validate.py" in skill, skill
     assert not (SKILL_ROOT / "README.md").exists(), "README.md should not be in the skill package"
     assert "callback/manual relay fallback" in skill, skill
@@ -727,6 +729,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
 
 def test_shared_contract_matches_generated_routes(root: Path) -> None:
     assert START_WORK_CONTRACT.exists(), START_WORK_CONTRACT
+    assert VALIDATE_START_WORK.exists(), VALIDATE_START_WORK
 
     sys.path.insert(0, str(SCRIPT_DIR))
     try:
