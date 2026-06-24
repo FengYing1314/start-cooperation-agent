@@ -24,4 +24,4 @@ For direct thread sends:
 4. Append `developer_running`, `reviewer_running`, or `developer_fix_running` only after the send succeeds.
 5. If the send fails, record a blocker event and do not advance the run status.
 
-In fallback mode, record work and results in the ledger, but skip direct-send running statuses unless a real message was sent.
+In fallback mode, record work and results in the ledger, but skip direct-send running statuses unless a real message was sent. `scripts/append_event.py` rejects fallback direct-send statuses unless `--allow-fallback-direct-status` and `--thread-id` prove that explicit exception.

@@ -132,7 +132,7 @@ Use the transport that the run mode and roster actually support:
 - `callback/manual relay`: use only when Manager has no thread id; return the exact payload and target unless the callback is a real user-approved messaging route.
 - `subagent` or `single-agent`: keep the fallback reason in the ledger, return results to the current caller, and do not claim that a thread message was sent unless one really was.
 
-Direct-send running statuses such as `developer_running`, `reviewer_running`, and `developer_fix_running` prove a real message was sent. Do not use them for unsent fallback payloads.
+Direct-send running statuses such as `developer_running`, `reviewer_running`, and `developer_fix_running` prove a real message was sent. Do not use them for unsent fallback payloads. `append_event.py` rejects those statuses in fallback runs unless the caller passes `--allow-fallback-direct-status` with a concrete `--thread-id`.
 
 ## Event-Driven Handoffs
 

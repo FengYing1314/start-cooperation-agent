@@ -26,6 +26,12 @@ RUN_STATUSES = {
     "final_delivery",
 }
 
+DIRECT_SEND_STATUSES = {
+    "developer_running",
+    "reviewer_running",
+    "developer_fix_running",
+}
+
 
 def slugify(value: str, fallback: str = "event") -> str:
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
@@ -56,6 +62,12 @@ def load_events(path: Path) -> list[dict[str, object]]:
         if line.strip():
             events.append(json.loads(line))
     return events
+
+
+def load_json(path: Path) -> dict[str, object] | None:
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def next_id(events: list[dict[str, object]], prefix: str) -> str:
@@ -127,6 +139,21 @@ def validate_run_status(status: str) -> None:
         raise SystemExit(f"Unknown run status '{status}'. Allowed: {allowed}")
 
 
+def validate_status_transport(args: argparse.Namespace, run_dir: Path) -> None:
+    if args.run_status not in DIRECT_SEND_STATUSES:
+        return
+    metadata = load_json(run_dir / "run.json") or {}
+    mode = str(metadata.get("mode", ""))
+    if mode in {"subagent", "single-agent"} and not args.allow_fallback_direct_status:
+        raise SystemExit(
+            f"{args.run_status} records a real direct send, but this run is {mode}. "
+            "Use a non-running status for fallback payloads, or pass "
+            "--allow-fallback-direct-status with --thread-id only after a real message was sent."
+        )
+    if mode in {"subagent", "single-agent"} and not args.thread_id.strip():
+        raise SystemExit("--allow-fallback-direct-status requires --thread-id for fallback direct-send statuses.")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", required=True, help="Path to a start-work run directory.")
@@ -144,6 +171,11 @@ def main() -> int:
         "--run-status",
         default="",
         help="Optional run status to write to coordination.md.",
+    )
+    parser.add_argument(
+        "--allow-fallback-direct-status",
+        action="store_true",
+        help="Allow direct-send running statuses in fallback runs only when a real message was sent.",
     )
     parser.add_argument("--msg-id", default="", help="Explicit local message/event id.")
     parser.add_argument("--body", default="", help="Optional payload text.")
@@ -171,6 +203,7 @@ def main() -> int:
     if event_id_exists(events, local_id):
         raise SystemExit(f"Event id already exists in this run: {local_id}")
     validate_run_status(args.run_status)
+    validate_status_transport(args, run_dir)
     timestamp = dt.datetime.now().astimezone().replace(microsecond=0).isoformat()
 
     body = read_body(args)

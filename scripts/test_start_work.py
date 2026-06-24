@@ -214,6 +214,48 @@ def test_subagent_fallback_without_team(root: Path) -> None:
     assert "fallback worker/current caller" in coordination, coordination
     assert "do not claim a thread send" in coordination, coordination
 
+    blocked_status = script(
+        APPEND_EVENT,
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        "status",
+        "--actor",
+        "M",
+        "--to",
+        "D1",
+        "--summary",
+        "pretend direct send",
+        "--run-status",
+        "developer_running",
+        check=False,
+    )
+    blocked_combined = blocked_status.stdout + blocked_status.stderr
+    assert blocked_status.returncode != 0, blocked_combined
+    assert "records a real direct send" in blocked_combined, blocked_combined
+
+    allowed_status = script(
+        APPEND_EVENT,
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        "status",
+        "--actor",
+        "M",
+        "--to",
+        "D1",
+        "--thread-id",
+        "real-thread",
+        "--summary",
+        "real fallback direct send",
+        "--run-status",
+        "developer_running",
+        "--allow-fallback-direct-status",
+        "--print-json",
+    )
+    allowed = json.loads(allowed_status.stdout)
+    assert allowed["thread_id"] == "real-thread", allowed
+
 
 def test_fallback_mode_requires_reason(root: Path) -> None:
     repo = make_repo(root, "fallback-reason-required")
@@ -256,6 +298,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "Do not use it as a source payload" in run_templates, run_templates
     assert "do not claim that a thread message was sent" in run_templates, run_templates
     assert "## Manager Work Order" not in run_templates, run_templates
+    assert "--allow-fallback-direct-status" in run_templates, run_templates
     assert len(run_templates.splitlines()) <= 40, run_templates
 
     for name in ("templates-work-order.md", "templates-review.md", "templates-final.md"):
@@ -270,6 +313,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "## Mode-Specific Transport" in protocol, protocol
     assert "Direct codex-thread route" in protocol, protocol
     assert "do not claim that a thread message was sent unless one really was" in protocol, protocol
+    assert "--allow-fallback-direct-status" in protocol, protocol
 
     openai_yaml = (SKILL_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
     assert "roster-routed" in openai_yaml, openai_yaml
