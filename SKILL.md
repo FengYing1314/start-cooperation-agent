@@ -60,7 +60,13 @@ python3 <skill-dir>/scripts/ack_team.py --repo <repo-root> --role D1
 python3 <skill-dir>/scripts/ack_team.py --repo <repo-root> --role R1
 ```
 
-Direct `codex-thread` runs require `--manager-thread-id`. If the Manager thread id is unavailable, record a usable Manager callback only for manual relay fallback. If neither is available, do not enable agent-to-Manager handoffs.
+8. Inspect readiness before starting or resuming task runs:
+
+```bash
+python3 <skill-dir>/scripts/inspect_team.py --repo <repo-root> --print-json
+```
+
+Direct `codex-thread` runs require `codex_thread_ready=true`. If the Manager thread id is unavailable, record a usable Manager callback only for manual relay fallback. If neither is available, do not enable agent-to-Manager handoffs.
 
 ## Start A Task
 
@@ -101,9 +107,9 @@ For tiny tasks, explain that start-work overhead is unnecessary and handle the t
 After editing scripts or handoff rules, run:
 
 ```bash
-python3 -m py_compile scripts/init_team.py scripts/ack_team.py scripts/init_run.py scripts/append_event.py scripts/inspect_run.py scripts/test_start_work.py
+python3 -m py_compile scripts/init_team.py scripts/ack_team.py scripts/init_run.py scripts/append_event.py scripts/inspect_team.py scripts/inspect_run.py scripts/test_start_work.py
 python3 scripts/test_start_work.py
 python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
 ```
 
-These checks cover stable team ids, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, progressive reference routing, and skill metadata validity.
+These checks cover stable team ids, team readiness inspection, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, progressive reference routing, and skill metadata validity.

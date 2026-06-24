@@ -15,6 +15,7 @@ INIT_TEAM = SCRIPT_DIR / "init_team.py"
 ACK_TEAM = SCRIPT_DIR / "ack_team.py"
 INIT_RUN = SCRIPT_DIR / "init_run.py"
 APPEND_EVENT = SCRIPT_DIR / "append_event.py"
+INSPECT_TEAM = SCRIPT_DIR / "inspect_team.py"
 INSPECT_RUN = SCRIPT_DIR / "inspect_run.py"
 SKILL_ROOT = SCRIPT_DIR.parent
 
@@ -82,6 +83,10 @@ def inspect_run(run_dir: Path, *, check: bool = True) -> subprocess.CompletedPro
     return script(INSPECT_RUN, "--run-dir", str(run_dir), "--print-json", check=check)
 
 
+def inspect_team(repo: Path, *, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return script(INSPECT_TEAM, "--repo", str(repo), "--print-json", check=check)
+
+
 def test_team_id_is_stable(root: Path) -> None:
     repo = make_repo(root, "team-id-stable")
     init_team(
@@ -108,6 +113,36 @@ def test_team_id_is_stable(root: Path) -> None:
     assert result["updated"] is False, result
 
 
+def test_team_inspection_requires_acknowledgements(root: Path) -> None:
+    repo = make_repo(root, "team-inspection")
+    init_team(
+        repo,
+        "--manager-thread-id",
+        "manager-thread",
+        "--developer-thread-id",
+        "dev-thread",
+        "--reviewer-thread-id",
+        "review-thread",
+    )
+    proc = inspect_team(repo, check=False)
+    combined = proc.stdout + proc.stderr
+    assert proc.returncode != 0, combined
+    data = json.loads(proc.stdout)
+    assert data["ok"] is False, data
+    assert data["roster_complete"] is True, data
+    assert data["acknowledgements_complete"] is False, data
+    assert data["codex_thread_ready"] is False, data
+    assert any("D1 acknowledgement pending" in problem for problem in data["problems"]), data
+
+    ack(repo, "D1")
+    ack(repo, "R1")
+    ready = json.loads(inspect_team(repo).stdout)
+    assert ready["ok"] is True, ready
+    assert ready["codex_thread_ready"] is True, ready
+    assert ready["manual_relay_ready"] is False, ready
+    assert ready["handoff_route_count"] == 5, ready
+
+
 def test_callback_only_rejected_for_direct_thread_mode(root: Path) -> None:
     repo = make_repo(root, "callback-only")
     init_team(
@@ -121,6 +156,12 @@ def test_callback_only_rejected_for_direct_thread_mode(root: Path) -> None:
     )
     ack(repo, "D1")
     ack(repo, "R1")
+    inspected = json.loads(inspect_team(repo).stdout)
+    assert inspected["ok"] is True, inspected
+    assert inspected["codex_thread_ready"] is False, inspected
+    assert inspected["manual_relay_ready"] is True, inspected
+    assert inspected["warnings"], inspected
+
     proc = script(
         INIT_RUN,
         "--repo",
@@ -519,6 +560,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "templates-work-order.md" in skill, skill
     assert "templates-review.md" in skill, skill
     assert "templates-final.md" in skill, skill
+    assert "inspect_team.py" in skill, skill
     assert "inspect_run.py" in skill, skill
     assert "quick_validate.py" in skill, skill
     assert not (SKILL_ROOT / "README.md").exists(), "README.md should not be in the skill package"
@@ -553,6 +595,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "do not claim that a thread message was sent unless one really was" in protocol, protocol
     assert "--allow-fallback-direct-status" in protocol, protocol
     assert "--allow-status-jump" in protocol, protocol
+    assert "inspect_team.py" in protocol, protocol
     assert "inspect_run.py" in protocol, protocol
     assert "machine-readable run index" in protocol, protocol
     assert "updates `run.json` with the current status and last event" in protocol, protocol
@@ -568,6 +611,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
 def main() -> int:
     tests = [
         test_team_id_is_stable,
+        test_team_inspection_requires_acknowledgements,
         test_callback_only_rejected_for_direct_thread_mode,
         test_direct_thread_happy_path,
         test_full_fix_review_cycle_status_path,

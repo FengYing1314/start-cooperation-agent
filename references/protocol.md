@@ -48,6 +48,8 @@ Use `scripts/init_team.py` for the team registry. The script is idempotent and w
 
 Use `scripts/ack_team.py` after Developer and Reviewer reply to standing instructions. A task run must not start until both `D1` and `R1` acknowledgements are recorded.
 
+Use `scripts/inspect_team.py --repo <repo-root> --print-json` before starting or resuming runs. It reports whether the team is structurally usable, whether direct `codex-thread` handoffs are ready, whether only manual relay is available, and any roster or acknowledgement problems.
+
 Required roster entries:
 
 - `M`: Manager thread id or callback.
