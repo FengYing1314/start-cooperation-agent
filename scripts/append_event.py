@@ -48,6 +48,11 @@ ALLOWED_STATUS_TRANSITIONS = {
     "final_delivery": set(),
 }
 
+EVENT_LOG_HEADER = "| Time | ID | Kind | Actor | To | Thread | Event Status | Run Status | Summary | File |"
+EVENT_LOG_SEPARATOR = "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+OLD_EVENT_LOG_HEADER = "| Time | ID | Kind | Actor | To | Thread | Status | Summary | File |"
+OLD_EVENT_LOG_SEPARATOR = "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+
 
 def slugify(value: str, fallback: str = "event") -> str:
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower()).strip("-")
@@ -130,12 +135,15 @@ def ensure_event_log(coordination: Path) -> str:
     if "## Event Log" not in text:
         if text and not text.endswith("\n"):
             text += "\n"
-        text += """
+        text += f"""
 ## Event Log
 
-| Time | ID | Kind | Actor | To | Thread | Status | Summary | File |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+{EVENT_LOG_HEADER}
+{EVENT_LOG_SEPARATOR}
 """
+    else:
+        text = text.replace(OLD_EVENT_LOG_HEADER, EVENT_LOG_HEADER, 1)
+        text = text.replace(OLD_EVENT_LOG_SEPARATOR, EVENT_LOG_SEPARATOR, 1)
     if not text.endswith("\n"):
         text += "\n"
     return text
@@ -270,6 +278,7 @@ def main() -> int:
         "to": args.to,
         "thread_id": args.thread_id,
         "status": args.status,
+        "run_status": args.run_status,
         "summary": args.summary,
         "file": file_path,
     }
@@ -280,7 +289,8 @@ def main() -> int:
     row = (
         f"| {table_cell(timestamp)} | {table_cell(local_id)} | {table_cell(args.kind)} | "
         f"{table_cell(args.actor)} | {table_cell(args.to)} | {table_cell(args.thread_id)} | "
-        f"{table_cell(args.status)} | {table_cell(args.summary)} | {table_cell(file_path)} |\n"
+        f"{table_cell(args.status)} | {table_cell(args.run_status)} | "
+        f"{table_cell(args.summary)} | {table_cell(file_path)} |\n"
     )
     coordination_text = set_run_status(ensure_event_log(coordination), args.run_status)
     coordination.write_text(coordination_text + row, encoding="utf-8")

@@ -47,6 +47,36 @@ def ack(repo: Path, role: str) -> None:
     script(ACK_TEAM, "--repo", str(repo), "--role", role)
 
 
+def append_status(
+    run_dir: Path,
+    *,
+    actor: str,
+    summary: str,
+    run_status: str,
+    to: str = "",
+    thread_id: str = "",
+) -> dict[str, object]:
+    args = [
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        "status",
+        "--actor",
+        actor,
+        "--summary",
+        summary,
+        "--run-status",
+        run_status,
+        "--print-json",
+    ]
+    if to:
+        args.extend(["--to", to])
+    if thread_id:
+        args.extend(["--thread-id", thread_id])
+    proc = script(APPEND_EVENT, *args)
+    return json.loads(proc.stdout)
+
+
 def test_team_id_is_stable(root: Path) -> None:
     repo = make_repo(root, "team-id-stable")
     init_team(
@@ -223,6 +253,74 @@ def test_direct_thread_happy_path(root: Path) -> None:
     assert jumped["summary"] == "audit jump", jumped
 
 
+def test_full_fix_review_cycle_status_path(root: Path) -> None:
+    repo = make_repo(root, "fix-review-cycle")
+    init_team(
+        repo,
+        "--manager-thread-id",
+        "manager-thread",
+        "--developer-thread-id",
+        "dev-thread",
+        "--reviewer-thread-id",
+        "review-thread",
+    )
+    ack(repo, "D1")
+    ack(repo, "R1")
+    run_result = script(
+        INIT_RUN,
+        "--repo",
+        str(repo),
+        "--slug",
+        "fix-loop",
+        "--request",
+        "exercise a full fix and review loop",
+        "--print-json",
+    )
+    run_data = json.loads(run_result.stdout)
+    run_dir = Path(str(run_data["run_dir"]))
+
+    statuses = [
+        ("M", "D1", "dev-thread", "manager_work_order", "work order recorded"),
+        ("M", "D1", "dev-thread", "developer_running", "work order sent"),
+        ("D1", "M", "manager-thread", "developer_done", "developer handoff received"),
+        ("M", "", "", "main_integration_check", "integration check complete"),
+        ("M", "R1", "review-thread", "reviewer_running", "review request sent"),
+        ("R1", "M", "manager-thread", "review_done", "review findings received"),
+        ("R1", "D1", "dev-thread", "fix_required", "blocking fix requested"),
+        ("R1", "D1", "dev-thread", "developer_fix_running", "fix request sent"),
+        ("M", "", "", "main_integration_check", "post-fix integration check complete"),
+        ("M", "R1", "review-thread", "reviewer_running", "re-review request sent"),
+        ("R1", "M", "manager-thread", "review_done", "re-review complete"),
+        ("R1", "M", "manager-thread", "accepted", "review accepted"),
+        ("M", "", "", "final_delivery", "final user delivery"),
+    ]
+
+    events = [
+        append_status(
+            run_dir,
+            actor=actor,
+            to=to,
+            thread_id=thread_id,
+            run_status=run_status,
+            summary=summary,
+        )
+        for actor, to, thread_id, run_status, summary in statuses
+    ]
+
+    assert [event["run_status"] for event in events] == [item[3] for item in statuses], events
+    assert events[0]["id"] == "M-001", events[0]
+    assert events[-1]["id"] == "M-007", events[-1]
+
+    coordination = (run_dir / "coordination.md").read_text(encoding="utf-8")
+    assert "Status: final_delivery" in coordination, coordination
+    assert "Event Status | Run Status" in coordination, coordination
+    assert "fix_required" in coordination, coordination
+    assert "developer_fix_running" in coordination, coordination
+
+    event_lines = (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(event_lines) == len(statuses), event_lines
+
+
 def test_subagent_fallback_without_team(root: Path) -> None:
     repo = make_repo(root, "subagent-fallback")
     proc = script(
@@ -339,6 +437,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "quick_validate.py" in skill, skill
     assert not (SKILL_ROOT / "README.md").exists(), "README.md should not be in the skill package"
     assert "callback/manual relay fallback" in skill, skill
+    assert "full fix-review loop progression" in skill, skill
 
     template_index = (SKILL_ROOT / "references" / "templates.md").read_text(encoding="utf-8")
     assert "This file is an index" in template_index, template_index
@@ -367,6 +466,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "do not claim that a thread message was sent unless one really was" in protocol, protocol
     assert "--allow-fallback-direct-status" in protocol, protocol
     assert "--allow-status-jump" in protocol, protocol
+    assert "records both its event status and run status" in protocol, protocol
+    assert "full fix-review loop as an executable invariant" in protocol, protocol
 
     openai_yaml = (SKILL_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
     assert "roster-routed" in openai_yaml, openai_yaml
@@ -379,6 +480,7 @@ def main() -> int:
         test_team_id_is_stable,
         test_callback_only_rejected_for_direct_thread_mode,
         test_direct_thread_happy_path,
+        test_full_fix_review_cycle_status_path,
         test_subagent_fallback_without_team,
         test_fallback_mode_requires_reason,
         test_reference_routing_is_progressive,

@@ -352,8 +352,8 @@ Results:
 
 ## Event Log
 
-| Time | ID | Kind | Actor | To | Thread | Status | Summary | File |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Time | ID | Kind | Actor | To | Thread | Event Status | Run Status | Summary | File |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 """
 
 

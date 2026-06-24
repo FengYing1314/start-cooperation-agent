@@ -122,7 +122,9 @@ review_done
 -> reviewer_running
 ```
 
-Use `scripts/append_event.py --run-status <status>` to advance status and append the event together. The script rejects transitions outside these flows unless `--allow-status-jump` is used for recovery or audit corrections.
+Use `scripts/append_event.py --run-status <status>` to advance status and append the event together. Each event records both its event status and run status so the ledger can be replayed later. The script rejects transitions outside these flows unless `--allow-status-jump` is used for recovery or audit corrections.
+
+The smoke test must exercise the full fix-review loop as an executable invariant, not only isolated transitions.
 
 ## Mode-Specific Transport
 
