@@ -6,6 +6,7 @@
 - Team lifecycle
 - Run directory
 - State machine
+- Mode-specific transport
 - Event-driven handoffs
 - Message ids
 - Ownership
@@ -123,11 +124,21 @@ review_done
 
 Use `scripts/append_event.py --run-status <status>` to advance status and append the event together.
 
-## Event-Driven Direct Handoffs
+## Mode-Specific Transport
+
+Use the transport that the run mode and roster actually support:
+
+- `codex-thread`: require Manager, Developer, and Reviewer thread ids; send role-to-role handoffs with `send_message_to_thread`.
+- `callback/manual relay`: use only when Manager has no thread id; return the exact payload and target unless the callback is a real user-approved messaging route.
+- `subagent` or `single-agent`: keep the fallback reason in the ledger, return results to the current caller, and do not claim that a thread message was sent unless one really was.
+
+Direct-send running statuses such as `developer_running`, `reviewer_running`, and `developer_fix_running` prove a real message was sent. Do not use them for unsent fallback payloads.
+
+## Event-Driven Handoffs
 
 Normal communication is sender-pushed, role-to-role messaging. The sender uses the roster target and the available thread messaging tool, such as `send_message_to_thread`, to deliver the next handoff. Do not make Manager inspect another role thread as the normal way to collect results. Callback-only Manager targets are manual relay fallback and are not valid for direct `codex-thread` runs.
 
-Default route:
+Direct codex-thread route:
 
 ```text
 Manager -> Developer: direct work order message

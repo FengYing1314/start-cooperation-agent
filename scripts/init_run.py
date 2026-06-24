@@ -143,7 +143,22 @@ def fallback_team(repo: Path) -> dict[str, object]:
             "D1": {"role": "Developer", "thread_id": "", "callback": "", "status": "fallback"},
             "R1": {"role": "Reviewer", "thread_id": "", "callback": "", "status": "fallback"},
         },
-        "handoff_route": [],
+        "handoff_route": [
+            {
+                "from": "M",
+                "to": "fallback worker/current caller",
+                "trigger": "fallback work assigned",
+                "manager_copy": "n/a",
+                "notes": "Fallback mode: keep work in the current caller or subagent prompt; do not claim a thread send.",
+            },
+            {
+                "from": "fallback worker/current caller",
+                "to": "M",
+                "trigger": "implementation or review result ready",
+                "manager_copy": "n/a",
+                "notes": "Fallback mode: return results to Manager with exact payload and checks; no thread message unless one was really sent.",
+            },
+        ],
         "manager_direct_handoff": False,
     }
 

@@ -211,6 +211,8 @@ def test_subagent_fallback_without_team(root: Path) -> None:
     assert "Mode: subagent" in coordination, coordination
     assert "Fallback Reason: thread tools unavailable" in coordination, coordination
     assert "fallback-subagent-fallback" in coordination, coordination
+    assert "fallback worker/current caller" in coordination, coordination
+    assert "do not claim a thread send" in coordination, coordination
 
 
 def test_fallback_mode_requires_reason(root: Path) -> None:
@@ -243,6 +245,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "templates-final.md" in skill, skill
     assert "quick_validate.py" in skill, skill
     assert not (SKILL_ROOT / "README.md").exists(), "README.md should not be in the skill package"
+    assert "callback/manual relay fallback" in skill, skill
 
     template_index = (SKILL_ROOT / "references" / "templates.md").read_text(encoding="utf-8")
     assert "This file is an index" in template_index, template_index
@@ -262,6 +265,11 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "## Transport Rules" in roles, roles
     assert "through the roster target" in roles, roles
     assert "Do not claim a handoff was sent unless a real message was sent" in roles, roles
+
+    protocol = (SKILL_ROOT / "references" / "protocol.md").read_text(encoding="utf-8")
+    assert "## Mode-Specific Transport" in protocol, protocol
+    assert "Direct codex-thread route" in protocol, protocol
+    assert "do not claim that a thread message was sent unless one really was" in protocol, protocol
 
     openai_yaml = (SKILL_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
     assert "roster-routed" in openai_yaml, openai_yaml
