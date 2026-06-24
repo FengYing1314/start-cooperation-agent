@@ -145,7 +145,40 @@ def test_team_inspection_requires_acknowledgements(root: Path) -> None:
     assert ready["ok"] is True, ready
     assert ready["codex_thread_ready"] is True, ready
     assert ready["manual_relay_ready"] is False, ready
+    assert ready["handoff_route_valid"] is True, ready
     assert ready["handoff_route_count"] == 5, ready
+
+
+def test_team_inspection_rejects_broken_handoff_route(root: Path) -> None:
+    repo = make_repo(root, "broken-route")
+    init_team(
+        repo,
+        "--manager-thread-id",
+        "manager-thread",
+        "--developer-thread-id",
+        "dev-thread",
+        "--reviewer-thread-id",
+        "review-thread",
+    )
+    ack(repo, "D1")
+    ack(repo, "R1")
+    team_path = repo / ".agent-work" / "start-work" / "team" / "team.json"
+    team = json.loads(team_path.read_text(encoding="utf-8"))
+    team["handoff_route"] = [
+        entry
+        for entry in team["handoff_route"]
+        if not (entry.get("from") == "R1" and entry.get("to") == "D1")
+    ]
+    team_path.write_text(json.dumps(team, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    proc = inspect_team(repo, check=False)
+    combined = proc.stdout + proc.stderr
+    assert proc.returncode != 0, combined
+    data = json.loads(proc.stdout)
+    assert data["ok"] is False, data
+    assert data["codex_thread_ready"] is False, data
+    assert data["handoff_route_valid"] is False, data
+    assert any("R1->D1" in problem for problem in data["problems"]), data
 
 
 def test_project_inspection_summarizes_team_and_recent_runs(root: Path) -> None:
@@ -223,6 +256,7 @@ def test_callback_only_rejected_for_direct_thread_mode(root: Path) -> None:
     assert inspected["ok"] is True, inspected
     assert inspected["codex_thread_ready"] is False, inspected
     assert inspected["manual_relay_ready"] is True, inspected
+    assert inspected["handoff_route_valid"] is True, inspected
     assert inspected["warnings"], inspected
 
     proc = script(
@@ -629,6 +663,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "quick_validate.py" in skill, skill
     assert not (SKILL_ROOT / "README.md").exists(), "README.md should not be in the skill package"
     assert "callback/manual relay fallback" in skill, skill
+    assert "handoff route invariants" in skill, skill
     assert "structured run metadata" in skill, skill
     assert "full fix-review loop progression" in skill, skill
 
@@ -662,6 +697,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "inspect_team.py" in protocol, protocol
     assert "inspect_run.py" in protocol, protocol
     assert "inspect_project.py" in protocol, protocol
+    assert "handoff route preserves role-to-role messaging" in protocol, protocol
     assert "machine-readable run index" in protocol, protocol
     assert "updates `run.json` with the current status and last event" in protocol, protocol
     assert "records both its event status and run status" in protocol, protocol
@@ -677,6 +713,7 @@ def main() -> int:
     tests = [
         test_team_id_is_stable,
         test_team_inspection_requires_acknowledgements,
+        test_team_inspection_rejects_broken_handoff_route,
         test_project_inspection_summarizes_team_and_recent_runs,
         test_callback_only_rejected_for_direct_thread_mode,
         test_direct_thread_happy_path,

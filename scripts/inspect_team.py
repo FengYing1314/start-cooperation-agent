@@ -90,6 +90,58 @@ def acknowledgement_ready(
     return True
 
 
+def route_entries(handoff_route: object, problems: list[str]) -> list[dict[str, object]]:
+    if not isinstance(handoff_route, list):
+        problems.append("team.json handoff_route must be a list")
+        return []
+    entries: list[dict[str, object]] = []
+    for index, entry in enumerate(handoff_route, start=1):
+        if not isinstance(entry, dict):
+            problems.append(f"handoff_route entry {index} must be an object")
+            continue
+        entries.append(entry)
+    return entries
+
+
+def has_route(
+    entries: list[dict[str, object]],
+    source: str,
+    target: str,
+    trigger: str,
+    manager_copy: str,
+) -> bool:
+    return any(
+        str(entry.get("from", "")).strip() == source
+        and str(entry.get("to", "")).strip() == target
+        and str(entry.get("trigger", "")).strip() == trigger
+        and str(entry.get("manager_copy", "")).strip() == manager_copy
+        for entry in entries
+    )
+
+
+def validate_handoff_route(
+    entries: list[dict[str, object]],
+    *,
+    manager_target: str,
+    problems: list[str],
+) -> bool:
+    required = [
+        ("M", "D1", "work order ready", "n/a"),
+        ("D1", manager_target, "implementation ready", "n/a"),
+        ("M", "R1", "review-ready package", "n/a"),
+        ("R1", "D1", "blocking findings", "yes"),
+        ("R1", manager_target, "accepted or blocked", "n/a"),
+    ]
+    missing = [
+        f"{source}->{target} trigger={trigger} manager_copy={manager_copy}"
+        for source, target, trigger, manager_copy in required
+        if not has_route(entries, source, target, trigger, manager_copy)
+    ]
+    for item in missing:
+        problems.append(f"Missing handoff route: {item}")
+    return not missing
+
+
 def inspect_team(repo: Path) -> dict[str, object]:
     problems: list[str] = []
     warnings: list[str] = []
@@ -152,21 +204,25 @@ def inspect_team(repo: Path) -> dict[str, object]:
             f"expected={acknowledgements_ready}"
         )
 
-    handoff_route = team.get("handoff_route", [])
-    if handoff_route and not isinstance(handoff_route, list):
-        problems.append("team.json handoff_route must be a list")
+    manager_target = "M" if expected_manager_direct else "M via recorded callback (manual relay)"
+    handoff_route = route_entries(team.get("handoff_route", []), problems)
+    route_ready = validate_handoff_route(handoff_route, manager_target=manager_target, problems=problems)
+    codex_thread_ready = direct_ready and route_ready
+    callback_ready = manual_relay_ready and route_ready
 
     return {
-        "ok": not problems and (direct_ready or manual_relay_ready),
+        "ok": not problems and (codex_thread_ready or callback_ready),
         "repo": str(repo),
         "team_dir": str(team_dir),
         "team_json": str(team_path),
         "team_id": team.get("team_id", ""),
         "roster_complete": roster_ready,
         "acknowledgements_complete": acknowledgements_ready,
-        "codex_thread_ready": direct_ready,
-        "manual_relay_ready": manual_relay_ready,
+        "codex_thread_ready": codex_thread_ready,
+        "manual_relay_ready": callback_ready,
         "manager_direct_handoff": expected_manager_direct,
+        "handoff_route_valid": route_ready,
+        "manager_target": manager_target,
         "roster": {
             "M": compact_roster_entry(manager),
             "D1": compact_roster_entry(developer),
@@ -176,7 +232,7 @@ def inspect_team(repo: Path) -> dict[str, object]:
             "D1": acknowledgement_entry(acknowledgements, "D1"),
             "R1": acknowledgement_entry(acknowledgements, "R1"),
         },
-        "handoff_route_count": len(handoff_route) if isinstance(handoff_route, list) else 0,
+        "handoff_route_count": len(handoff_route),
         "warnings": warnings,
         "problems": problems,
     }

@@ -118,4 +118,4 @@ python3 scripts/test_start_work.py
 python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
 ```
 
-These checks cover stable team ids, team readiness inspection, project status inspection, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, progressive reference routing, and skill metadata validity.
+These checks cover stable team ids, team readiness inspection, handoff route invariants, project status inspection, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, progressive reference routing, and skill metadata validity.
