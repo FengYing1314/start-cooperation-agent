@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 
 IGNORE_RULE = "/.agent-work/"
+SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 def run_git(repo: Path, *args: str) -> tuple[int, str, str]:
@@ -362,6 +363,80 @@ def mark_team_used(team_path: Path, team: dict[str, object], timestamp: str) -> 
     team_path.write_text(json.dumps(team, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def next_commands(run_dir: Path, team: dict[str, object], mode: str) -> dict[str, list[str]]:
+    roster = team.get("roster", {})
+    developer_thread = ""
+    if isinstance(roster, dict) and isinstance(roster.get("D1"), dict):
+        developer_thread = str(roster["D1"].get("thread_id", ""))
+    commands = {
+        "inspect_run": [
+            sys.executable,
+            str(SCRIPT_DIR / "inspect_run.py"),
+            "--run-dir",
+            str(run_dir),
+            "--print-json",
+        ],
+        "record_work_order": [
+            sys.executable,
+            str(SCRIPT_DIR / "append_event.py"),
+            "--run-dir",
+            str(run_dir),
+            "--kind",
+            "message",
+            "--actor",
+            "M",
+            "--to",
+            "D1",
+            "--summary",
+            "work order ready",
+            "--run-status",
+            "manager_work_order",
+            "--body-file",
+            "<work-order-payload.md>",
+            "--print-json",
+        ],
+    }
+    if mode == "codex-thread":
+        commands["record_developer_running"] = [
+            sys.executable,
+            str(SCRIPT_DIR / "append_event.py"),
+            "--run-dir",
+            str(run_dir),
+            "--kind",
+            "status",
+            "--actor",
+            "M",
+            "--to",
+            "D1",
+            "--thread-id",
+            developer_thread or "<developer-thread-id>",
+            "--summary",
+            "work order sent",
+            "--run-status",
+            "developer_running",
+            "--print-json",
+        ]
+    return commands
+
+
+def next_actions(mode: str) -> list[str]:
+    actions = [
+        "Run inspect_run before resuming or appending events.",
+        "Write the Manager work order from references/templates-work-order.md.",
+        "Record the outbound work order with record_work_order.",
+    ]
+    if mode == "codex-thread":
+        actions.extend(
+            [
+                "Send the same work-order payload to D1 with send_message_to_thread.",
+                "Only after the send succeeds, run record_developer_running.",
+            ]
+        )
+    else:
+        actions.append("Return or relay the work-order payload; do not record direct-send running status unless a real message was sent.")
+    return actions
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=".", help="Repository root or any path inside it.")
@@ -486,6 +561,8 @@ def main() -> int:
         "snapshots_written": snapshots_written,
         "snapshot_refreshed": bool(args.refresh_snapshot and snapshots_written and not created),
         "invoked_at": now.isoformat(),
+        "next_commands": next_commands(run_dir, team, args.mode),
+        "next_actions": next_actions(args.mode),
     }
 
     if args.print_json:

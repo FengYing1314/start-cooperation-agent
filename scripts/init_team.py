@@ -14,6 +14,7 @@ from pathlib import Path
 from start_work_contract import required_route_specs
 
 IGNORE_RULE = "/.agent-work/"
+SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 def run_git(repo: Path, *args: str) -> tuple[int, str, str]:
@@ -316,6 +317,68 @@ Use this roster for all future handoffs. Acknowledge after updating your local c
 """
 
 
+def next_commands(repo: Path) -> dict[str, list[str]]:
+    return {
+        "inspect_team": [
+            sys.executable,
+            str(SCRIPT_DIR / "inspect_team.py"),
+            "--repo",
+            str(repo),
+            "--print-json",
+        ],
+        "ack_developer": [
+            sys.executable,
+            str(SCRIPT_DIR / "ack_team.py"),
+            "--repo",
+            str(repo),
+            "--role",
+            "D1",
+            "--print-json",
+        ],
+        "ack_reviewer": [
+            sys.executable,
+            str(SCRIPT_DIR / "ack_team.py"),
+            "--repo",
+            str(repo),
+            "--role",
+            "R1",
+            "--print-json",
+        ],
+        "init_run": [
+            sys.executable,
+            str(SCRIPT_DIR / "init_run.py"),
+            "--repo",
+            str(repo),
+            "--slug",
+            "<work-slug>",
+            "--request",
+            "<user request>",
+            "--print-json",
+        ],
+    }
+
+
+def next_actions(team: dict[str, object], update_written: bool) -> list[str]:
+    if not team.get("roster_complete"):
+        return [
+            "Complete M, D1, and R1 roster targets before creating a run.",
+            "Run inspect_team after updating the roster.",
+        ]
+    if not team.get("acknowledgements_complete"):
+        actions = [
+            "Send standing-developer.md to D1 and standing-reviewer.md to R1 using the roster targets.",
+            "After each role replies with the roster acknowledgement, run ack_developer and ack_reviewer.",
+            "Run inspect_team before starting a task run.",
+        ]
+        if update_written:
+            actions.insert(0, "Send roster-update.md to active role threads before recording fresh acknowledgements.")
+        return actions
+    return [
+        "Run inspect_team to confirm codex_thread_ready or manual_relay_ready.",
+        "Start the next task with init_run.",
+    ]
+
+
 def update_team(existing: dict[str, object] | None, args: argparse.Namespace, repo: Path, now: str) -> tuple[dict[str, object], list[str]]:
     existing_team_id = ""
     if existing and isinstance(existing.get("team_id"), str):
@@ -451,6 +514,8 @@ def main() -> int:
         "standing_developer": str(team_dir / "standing-developer.md"),
         "standing_reviewer": str(team_dir / "standing-reviewer.md"),
         "roster_update": str(team_dir / "roster-update.md") if update_written else "",
+        "next_commands": next_commands(repo),
+        "next_actions": next_actions(team, update_written),
     }
 
     if args.print_json:

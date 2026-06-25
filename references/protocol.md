@@ -50,6 +50,8 @@ Use `scripts/init_team.py` for the team registry. The script is idempotent and w
   roster-update.md    # only when an existing roster changes
 ```
 
+The JSON result includes `next_commands` and `next_actions`; prefer those for acknowledgement, inspection, and run-start commands.
+
 Use `scripts/ack_team.py` after Developer and Reviewer reply to standing instructions. A task run must not start until both `D1` and `R1` acknowledgements are recorded.
 
 Use `scripts/inspect_team.py --repo <repo-root> --print-json` before starting or resuming runs. It reports whether the team is structurally usable, whether direct `codex-thread` handoffs are ready, whether only manual relay is available, whether the handoff route preserves role-to-role messaging, and any roster or acknowledgement problems.
@@ -79,6 +81,8 @@ Each task gets a run ledger:
 ```
 
 Use `scripts/init_run.py` to create a run. In `codex-thread` mode it must read `team/team.json`; if the team is missing, incomplete, unacknowledged, or lacks `M.thread_id` for direct mode, it must fail with a clear instruction to initialize or acknowledge the team first.
+
+The JSON result includes `next_commands` and `next_actions`; use them to inspect the run, record the work-order payload, and only advance to a direct-send running status after a real thread message succeeds.
 
 `run.json` is the machine-readable run index. It must include `current_status`, status update metadata, last event metadata, mode, team roster snapshot, and paths to the ledger files so a later agent can resume without parsing prose first.
 

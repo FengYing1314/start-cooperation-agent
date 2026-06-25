@@ -139,7 +139,7 @@ def test_team_id_is_stable(root: Path) -> None:
 
 def test_team_inspection_requires_acknowledgements(root: Path) -> None:
     repo = make_repo(root, "team-inspection")
-    init_team(
+    team_result = init_team(
         repo,
         "--manager-thread-id",
         "manager-thread",
@@ -148,6 +148,13 @@ def test_team_inspection_requires_acknowledgements(root: Path) -> None:
         "--reviewer-thread-id",
         "review-thread",
     )
+    team_commands = team_result["next_commands"]
+    assert team_commands["inspect_team"][1].endswith("inspect_team.py"), team_commands
+    assert team_commands["inspect_team"][team_commands["inspect_team"].index("--repo") + 1] == str(repo), team_commands
+    assert team_commands["ack_developer"][-3:] == ["--role", "D1", "--print-json"], team_commands
+    assert team_commands["ack_reviewer"][-3:] == ["--role", "R1", "--print-json"], team_commands
+    assert team_commands["init_run"][1].endswith("init_run.py"), team_commands
+    assert any("standing-developer.md" in item for item in team_result["next_actions"]), team_result
     proc = inspect_team(repo, check=False)
     combined = proc.stdout + proc.stderr
     assert proc.returncode != 0, combined
@@ -333,6 +340,13 @@ def test_direct_thread_happy_path(root: Path) -> None:
     run_dir = Path(str(run_data["run_dir"]))
     assert run_data["current_status"] == "init", run_data
     assert run_data["event_count"] == 0, run_data
+    run_commands = run_data["next_commands"]
+    assert run_commands["inspect_run"][1].endswith("inspect_run.py"), run_commands
+    assert run_commands["inspect_run"][run_commands["inspect_run"].index("--run-dir") + 1] == str(run_dir), run_commands
+    assert run_commands["record_work_order"][1].endswith("append_event.py"), run_commands
+    assert "manager_work_order" in run_commands["record_work_order"], run_commands
+    assert "dev-thread" in run_commands["record_developer_running"], run_commands
+    assert any("Only after the send succeeds" in item for item in run_data["next_actions"]), run_data
     invalid_result = script(
         APPEND_EVENT,
         "--run-dir",
@@ -582,6 +596,9 @@ def test_subagent_fallback_without_team(root: Path) -> None:
     data = json.loads(proc.stdout)
     assert data["mode"] == "subagent", data
     assert data["fallback_reason"] == "thread tools unavailable", data
+    assert "record_work_order" in data["next_commands"], data
+    assert "record_developer_running" not in data["next_commands"], data
+    assert any("do not record direct-send running status" in item for item in data["next_actions"]), data
     run_dir = Path(str(data["run_dir"]))
     coordination = (run_dir / "coordination.md").read_text(encoding="utf-8")
     assert "Mode: subagent" in coordination, coordination
@@ -688,6 +705,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "callback/manual relay fallback" in skill, skill
     assert "handoff route invariants" in skill, skill
     assert "structured run metadata" in skill, skill
+    assert "next_commands" in skill, skill
+    assert "next_actions" in skill, skill
     assert "full fix-review loop progression" in skill, skill
 
     template_index = (SKILL_ROOT / "references" / "templates.md").read_text(encoding="utf-8")
@@ -729,6 +748,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "inspect_project.py" in protocol, protocol
     assert "handoff route preserves role-to-role messaging" in protocol, protocol
     assert "machine-readable run index" in protocol, protocol
+    assert "next_commands" in protocol, protocol
+    assert "next_actions" in protocol, protocol
     assert "updates `run.json` with the current status and last event" in protocol, protocol
     assert "records both its event status and run status" in protocol, protocol
     assert "full fix-review loop as an executable invariant" in protocol, protocol

@@ -36,6 +36,8 @@ Load only the reference needed for the next action:
 
 Prefer generated `team/*.md` and run ledger files over hand-writing payloads.
 
+When a script returns `next_commands` or `next_actions`, follow those structured hints instead of reconstructing equivalent commands from prose.
+
 For a project-level resume or audit snapshot, inspect structured state first:
 
 ```bash
@@ -122,4 +124,4 @@ For trigger behavior forward-tests, load `references/trigger-eval-prompts.md`, p
 
 `validate_start_work.py` compiles every local Python script, including `start_work_contract.py`, runs the smoke tests, and checks git whitespace/conflict markers when the skill is inside a git worktree.
 
-These checks cover stable team ids, team readiness inspection, handoff route invariants, project status inspection, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, trigger-eval prompt coverage, fixture preparation and artifact cleanup, dry-run planning, plan execution, trace scoring, contract/documentation drift, progressive reference routing, and skill metadata validity.
+These checks cover stable team ids, team next-step hints, team readiness inspection, handoff route invariants, project status inspection, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, run next-step hints, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, trigger-eval prompt coverage, fixture preparation and artifact cleanup, dry-run planning, plan execution, trace scoring, contract/documentation drift, progressive reference routing, and skill metadata validity.
