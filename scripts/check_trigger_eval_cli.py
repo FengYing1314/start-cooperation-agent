@@ -59,6 +59,8 @@ def check_cli(args: argparse.Namespace) -> dict[str, object]:
             cwd=str(cwd),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=None if args.timeout_seconds <= 0 else args.timeout_seconds,
             check=False,
         )
@@ -121,7 +123,7 @@ def main() -> int:
 
     result = check_cli(args)
     if args.print_json:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(result, ensure_ascii=True, indent=2))
     else:
         print_text(result)
     return 0 if result["ok"] else 1

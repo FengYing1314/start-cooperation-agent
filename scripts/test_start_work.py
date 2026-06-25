@@ -265,6 +265,9 @@ def test_project_inspection_summarizes_team_and_recent_runs(root: Path) -> None:
     assert latest["run_id"] == "20260101-000002-second", summary
     assert latest["current_status"] == "manager_work_order", summary
     assert latest["event_count"] == 1, summary
+    assert any("Resume latest run" in item for item in summary["next_actions"]), summary
+    assert any("Send the recorded work order" in item for item in summary["next_actions"]), summary
+    assert latest["next_actions"], latest
     assert Path(str(first["run_dir"])).exists(), first
 
 
@@ -345,6 +348,7 @@ def test_direct_thread_happy_path(root: Path) -> None:
     run_dir = Path(str(run_data["run_dir"]))
     assert run_data["current_status"] == "init", run_data
     assert run_data["event_count"] == 0, run_data
+    assert any("Manager work order" in item for item in run_data["next_actions"]), run_data
     run_commands = run_data["next_commands"]
     assert run_commands["inspect_run"][1].endswith("inspect_run.py"), run_commands
     assert run_commands["inspect_run"][run_commands["inspect_run"].index("--run-dir") + 1] == str(run_dir), run_commands
@@ -426,6 +430,7 @@ def test_direct_thread_happy_path(root: Path) -> None:
     assert inspected["current_status"] == "developer_running", inspected
     assert inspected["next_allowed_statuses"] == ["developer_done", "blocked"], inspected
     assert inspected["last_event"]["id"] == "M-002", inspected
+    assert any("Developer completion handoff" in item for item in inspected["next_actions"]), inspected
 
     jumped_result = script(
         APPEND_EVENT,
@@ -447,6 +452,8 @@ def test_direct_thread_happy_path(root: Path) -> None:
     jumped_metadata = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     assert jumped_metadata["current_status"] == "accepted", jumped_metadata
     assert jumped_metadata["status_event_id"] == "M-003", jumped_metadata
+    accepted = json.loads(inspect_run(run_dir).stdout)
+    assert any("final user-facing summary" in item for item in accepted["next_actions"]), accepted
 
 
 def test_full_fix_review_cycle_status_path(root: Path) -> None:
@@ -1036,6 +1043,43 @@ def test_trigger_eval_runner_respects_cwd_and_artifact(root: Path) -> None:
     assert launch_summary["results"][0]["ok"] is False, launch_summary
     launch_event = json.loads(launch_artifact.read_text(encoding="utf-8").splitlines()[-1])
     assert launch_event["eval_error"] == "launch_failed", launch_event
+
+    undecodable_artifact = root / "artifacts" / "undecodable.jsonl"
+    undecodable_plan_path = root / "undecodable-plan.json"
+    undecodable_plan_path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "undecodable-01",
+                    "artifact": str(undecodable_artifact),
+                    "cwd": str(repo),
+                    "command": [
+                        sys.executable,
+                        "-c",
+                        "import sys; sys.stderr.buffer.write(bytes([0xff, 0xfe, 0xfd])); sys.exit(1)",
+                    ],
+                }
+            ],
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    undecodable = script(
+        RUN_TRIGGER_EVAL_PLAN,
+        "--plan",
+        str(undecodable_plan_path),
+        "--print-json",
+        check=False,
+    )
+    assert undecodable.returncode != 0, undecodable.stdout
+    undecodable_summary = json.loads(undecodable.stdout)
+    assert undecodable_summary["results"][0]["returncode"] == 1, undecodable_summary
+    assert "stderr_tail" in undecodable_summary["results"][0], undecodable_summary
+    undecodable_event = json.loads(undecodable_artifact.read_text(encoding="utf-8").splitlines()[-1])
+    assert undecodable_event["eval_error"] == "command_failed", undecodable_event
+    assert "stderr_tail" in undecodable_event, undecodable_event
 
 
 def test_trigger_eval_score_reads_jsonl_artifacts(root: Path) -> None:

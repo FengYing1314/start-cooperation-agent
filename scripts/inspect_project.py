@@ -30,7 +30,32 @@ def compact_run(summary: dict[str, object]) -> dict[str, object]:
         "last_event": summary.get("last_event"),
         "run_dir": summary.get("run_dir", ""),
         "problems": summary.get("problems", []),
+        "next_actions": summary.get("next_actions", []),
     }
+
+
+def next_actions(team: dict[str, object], latest_runs: list[dict[str, object]]) -> list[str]:
+    team_actions = team.get("next_actions", [])
+    if not team.get("ok"):
+        if isinstance(team_actions, list) and team_actions:
+            return [str(item) for item in team_actions]
+        return ["Fix team readiness before starting or resuming codex-thread runs."]
+
+    if latest_runs:
+        latest = latest_runs[0]
+        status = str(latest.get("current_status", ""))
+        if status not in {"final_delivery", "blocked"}:
+            run_actions = latest.get("next_actions", [])
+            actions = [f"Resume latest run {latest.get('run_id', '')} at status {status}."]
+            if isinstance(run_actions, list):
+                actions.extend(str(item) for item in run_actions)
+            return actions
+
+    if team.get("codex_thread_ready"):
+        return ["Start a new direct codex-thread run with init_run.py."]
+    if team.get("manual_relay_ready"):
+        return ["Use callback/manual relay mode, or record M.thread_id before starting a direct codex-thread run."]
+    return ["Inspect team readiness before starting the next task."]
 
 
 def inspect_project(repo: Path, limit: int) -> dict[str, object]:
@@ -59,11 +84,13 @@ def inspect_project(repo: Path, limit: int) -> dict[str, object]:
             "acknowledgements_complete": team.get("acknowledgements_complete", False),
             "warnings": team.get("warnings", []),
             "problems": team.get("problems", []),
+            "next_actions": team.get("next_actions", []),
         },
         "runs_root": str(repo / ".agent-work" / "start-work" / "runs"),
         "run_count": len(all_runs),
         "latest_runs": selected_runs,
         "problems": problems,
+        "next_actions": next_actions(team, selected_runs),
     }
 
 
@@ -86,6 +113,11 @@ def print_text(summary: dict[str, object]) -> None:
         print("Problems:")
         for problem in problems:
             print(f"- {problem}")
+    next_action_items = summary.get("next_actions", [])
+    if isinstance(next_action_items, list) and next_action_items:
+        print("Next Actions:")
+        for action in next_action_items:
+            print(f"- {action}")
 
 
 def main() -> int:

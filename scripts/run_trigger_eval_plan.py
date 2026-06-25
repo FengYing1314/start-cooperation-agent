@@ -77,6 +77,8 @@ def run_item(
                 stdout=stdout,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout_seconds,
                 check=False,
             )
@@ -213,7 +215,7 @@ def main() -> int:
 
     summary = run_plan(args)
     if args.print_json:
-        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        print(json.dumps(summary, ensure_ascii=True, indent=2))
     else:
         print_text(summary)
     return 0 if summary["ok"] else 1

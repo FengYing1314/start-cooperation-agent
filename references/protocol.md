@@ -26,7 +26,7 @@ The team roster is the source of truth for thread ids and callbacks. Every role 
 
 The executable contract for run statuses, status transitions, and required handoff routes lives in `scripts/start_work_contract.py`. Update that module and the smoke tests together when the protocol changes.
 
-Use `scripts/inspect_project.py --repo <repo-root> --print-json` for a project-level resume snapshot. It combines team readiness and recent run summaries without loading the full ledgers.
+Use `scripts/inspect_project.py --repo <repo-root> --print-json` for a project-level resume snapshot. It combines team readiness and recent run summaries without loading the full ledgers. Its JSON `next_actions` field is the preferred LLM-readable resume path.
 
 ## Team Lifecycle
 
@@ -86,7 +86,7 @@ The JSON result includes `next_commands` and `next_actions`; use them to inspect
 
 `run.json` is the machine-readable run index. It must include `current_status`, status update metadata, last event metadata, mode, team roster snapshot, and paths to the ledger files so a later agent can resume without parsing prose first.
 
-Use `scripts/inspect_run.py --run-dir <run-dir> --print-json` before resuming or auditing a run. It reports `ok`, current status, next allowed statuses, last event, and ledger consistency problems.
+Use `scripts/inspect_run.py --run-dir <run-dir> --print-json` before resuming or auditing a run. It reports `ok`, current status, next allowed statuses, last event, ledger consistency problems, and LLM-readable `next_actions`.
 
 In `subagent` or `single-agent` mode, `init_run.py` can create a run without an initialized team, but `--fallback-reason` is required and must explain why the long-lived thread team is not being used.
 
