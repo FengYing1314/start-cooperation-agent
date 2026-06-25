@@ -29,6 +29,7 @@ def compact_run(summary: dict[str, object]) -> dict[str, object]:
         "event_count": summary.get("event_count", 0),
         "last_event": summary.get("last_event"),
         "pending_outbound": summary.get("pending_outbound"),
+        "reviewer_fix_send_state": summary.get("reviewer_fix_send_state"),
         "run_dir": summary.get("run_dir", ""),
         "problems": summary.get("problems", []),
         "next_actions": summary.get("next_actions", []),

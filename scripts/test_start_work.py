@@ -757,6 +757,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "full fix-review loop progression" in skill, skill
     assert "non-destructive Codex App preflight" in skill, skill
     assert "If it starts with `no`, send or relay the exact fix payload to D1" in skill, skill
+    assert "reviewer fix send-state project resume" in skill, skill
 
     template_index = (SKILL_ROOT / "references" / "templates.md").read_text(encoding="utf-8")
     assert "This file is an index" in template_index, template_index
@@ -1607,6 +1608,17 @@ no, D1 thread dev-thread is the unsent target.
     )
     assert any("before appending fix_required" in item for item in reviewer_fix_unsent_inspected["next_actions"]), (
         reviewer_fix_unsent_inspected
+    )
+    project_after_unsent = json.loads(inspect_project(repo, "--limit", "10").stdout)
+    project_unsent_runs = [
+        item
+        for item in project_after_unsent["latest_runs"]
+        if item.get("run_id") == reviewer_fix_unsent_run["run_id"]
+    ]
+    assert len(project_unsent_runs) == 1, project_after_unsent
+    assert project_unsent_runs[0]["reviewer_fix_send_state"]["next_handoff_sent"] == "no", project_unsent_runs[0]
+    assert any("Next handoff sent: no" in item for item in project_unsent_runs[0]["next_actions"]), (
+        project_unsent_runs[0]
     )
 
     accepted_run = json.loads(
