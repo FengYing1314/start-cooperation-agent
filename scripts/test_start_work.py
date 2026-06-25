@@ -772,6 +772,10 @@ def test_reference_routing_is_progressive(root: Path) -> None:
 
     for name in ("templates-work-order.md", "templates-review.md", "templates-final.md"):
         assert (SKILL_ROOT / "references" / name).exists(), name
+    work_order_templates = (SKILL_ROOT / "references" / "templates-work-order.md").read_text(encoding="utf-8")
+    review_templates = (SKILL_ROOT / "references" / "templates-review.md").read_text(encoding="utf-8")
+    assert "yes | no, plus target thread or unsent target" in work_order_templates, work_order_templates
+    assert "yes | no, plus target thread or unsent target" in review_templates, review_templates
 
     codex_thread = (SKILL_ROOT / "references" / "codex-thread-mode.md").read_text(encoding="utf-8")
     assert "send_message_to_thread" in codex_thread, codex_thread
@@ -931,6 +935,48 @@ Status: complete | blocked
     assert any("Unexpected From" in problem for problem in bad["problems"]), bad
     assert any("Unexpected To" in problem for problem in bad["problems"]), bad
     assert any("Required label is empty: Ownership" in problem for problem in bad["problems"]), bad
+
+    bad_completion = root / "bad-developer-completion.md"
+    bad_completion.write_text(
+        """Start-work handoff D1-001
+Run ID: 20260101-000001-test
+Team ID: team-001
+From: D1
+To: M
+Status: complete
+
+Summary:
+Done.
+
+Changed files:
+src/parser.py
+
+Checks:
+python -m pytest tests/test_parser.py
+
+Requested next action:
+Manager checkpoint.
+
+Next handoff sent:
+maybe, Manager thread manager-thread.
+""",
+        encoding="utf-8",
+    )
+    bad_completion_proc = script(
+        VALIDATE_HANDOFF,
+        "--kind",
+        "developer_completion",
+        "--body-file",
+        str(bad_completion),
+        "--print-json",
+        check=False,
+    )
+    assert bad_completion_proc.returncode != 0, bad_completion_proc.stdout
+    bad_completion_summary = json.loads(bad_completion_proc.stdout)
+    assert any(
+        "Next handoff sent must start with yes or no" in problem
+        for problem in bad_completion_summary["problems"]
+    ), bad_completion_summary
 
 
 def test_prepare_outbound_handoff_records_and_routes(root: Path) -> None:
@@ -1269,6 +1315,9 @@ none
 
 Requested next action:
 Manager checkpoint and send to Reviewer if ready.
+
+Next handoff sent:
+yes, Manager thread manager-thread.
 """,
         encoding="utf-8",
     )
@@ -1347,6 +1396,9 @@ none
 
 Requested next action:
 Manager checkpoint and send re-review if ready.
+
+Next handoff sent:
+yes, Manager thread manager-thread.
 """,
         encoding="utf-8",
     )
@@ -1424,6 +1476,9 @@ python -m pytest tests/test_parser.py
 
 Requested next action:
 Fix only the blocking findings, then hand off to Manager for checkpoint.
+
+Next handoff sent:
+yes, D1 thread dev-thread.
 """,
         encoding="utf-8",
     )
@@ -1507,6 +1562,9 @@ none
 
 Requested next action:
 Manager final delivery.
+
+Next handoff sent:
+yes, Manager thread manager-thread.
 """,
         encoding="utf-8",
     )

@@ -85,4 +85,7 @@ Blocking issues:
 
 Requested next action:
 Manager checkpoint and send to Reviewer if ready.
+
+Next handoff sent:
+yes | no, plus target thread or unsent target.
 ```

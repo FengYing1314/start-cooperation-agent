@@ -49,6 +49,7 @@ SPECS = {
             "Changed files",
             "Checks",
             "Requested next action",
+            "Next handoff sent",
         ),
         expected_values={"From": ("D1",), "To": ("M",), "Status": ("complete", "blocked")},
         suggested_next_action="Record developer_done or blocked after receiving this handoff.",
@@ -86,6 +87,7 @@ SPECS = {
             "Do not change",
             "Checks or evidence",
             "Requested next action",
+            "Next handoff sent",
         ),
         expected_values={"From": ("R1",), "To": ("D1",), "Manager copy": ("M",), "Status": ("changes required",)},
         suggested_next_action="Send the fix handoff to D1 and a separate Manager copy before recording developer_fix_running.",
@@ -102,6 +104,7 @@ SPECS = {
             "Checks run",
             "Remaining risk",
             "Requested next action",
+            "Next handoff sent",
         ),
         expected_values={"From": ("D1",), "To": ("M",), "Status": ("complete", "blocked")},
         suggested_next_action="Record main_integration_check after Manager verifies the fix completion.",
@@ -117,6 +120,7 @@ SPECS = {
             "Checks reviewed",
             "Residual risk",
             "Requested next action",
+            "Next handoff sent",
         ),
         expected_values={"From": ("R1",), "To": ("M",), "Status": ("accepted",)},
         suggested_next_action="Record accepted, then prepare final_delivery after Manager verifies final state.",
@@ -190,6 +194,12 @@ def validate_payload(kind: str, text: str) -> dict[str, object]:
         value = fields.get(label, "")
         if value and value not in allowed:
             problems.append(f"Unexpected {label}: got {value!r}, expected one of: {', '.join(allowed)}")
+
+    sent_value = fields.get("Next handoff sent", "")
+    if sent_value:
+        sent_word = sent_value.split(None, 1)[0].strip(".,;:").lower()
+        if sent_word not in {"yes", "no"}:
+            problems.append("Next handoff sent must start with yes or no.")
 
     next_actions = (
         [spec.suggested_next_action]

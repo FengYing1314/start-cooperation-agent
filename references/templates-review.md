@@ -83,6 +83,9 @@ Checks or evidence:
 
 Requested next action:
 Fix only the blocking findings, then hand off to Manager for checkpoint.
+
+Next handoff sent:
+yes | no, plus target thread or unsent target.
 ```
 
 ## Developer Fix Completion
@@ -105,6 +108,9 @@ Remaining risk:
 
 Requested next action:
 Manager checkpoint and send re-review if ready.
+
+Next handoff sent:
+yes | no, plus target thread or unsent target.
 ```
 
 ## Reviewer Accepted
@@ -127,4 +133,7 @@ Residual risk:
 
 Requested next action:
 Manager final delivery.
+
+Next handoff sent:
+yes | no, plus target thread or unsent target.
 ```
