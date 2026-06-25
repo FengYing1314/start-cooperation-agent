@@ -93,21 +93,29 @@ def infer_trigger(path: Path, patterns: list[str]) -> tuple[bool | None, str, li
     return bool(matches), "heuristic", matches
 
 
-def load_plan(args: argparse.Namespace) -> list[dict[str, Any]]:
+def resolve_from(base: Path, value: str) -> Path:
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = base / path
+    return path.resolve()
+
+
+def load_plan(args: argparse.Namespace) -> tuple[list[dict[str, Any]], Path | None]:
     if args.plan:
-        raw_plan = json.loads(Path(args.plan).expanduser().resolve().read_text(encoding="utf-8"))
+        plan_path = Path(args.plan).expanduser().resolve()
+        raw_plan = json.loads(plan_path.read_text(encoding="utf-8"))
         if not isinstance(raw_plan, list):
             raise SystemExit("Plan file must contain a JSON array.")
         if not all(isinstance(item, dict) for item in raw_plan):
             raise SystemExit("Plan items must be JSON objects.")
-        return raw_plan
+        return raw_plan, plan_path.parent
     return build_plan(
         SimpleNamespace(
             prompts=args.prompts,
             artifact_dir=args.artifact_dir,
             codex_bin=args.codex_bin,
         )
-    )
+    ), None
 
 
 def select_items(plan: list[dict[str, Any]], requested_ids: list[str]) -> list[dict[str, Any]]:
@@ -122,15 +130,26 @@ def select_items(plan: list[dict[str, Any]], requested_ids: list[str]) -> list[d
     return selected
 
 
+def expected_trigger(value: Any, item_id: str) -> bool:
+    parsed = bool_from_value(value)
+    if parsed is None:
+        raise SystemExit(f"{item_id}: should_trigger must be a boolean or boolean-like string.")
+    return parsed
+
+
 def score(args: argparse.Namespace) -> dict[str, object]:
-    plan = load_plan(args)
+    plan, plan_dir = load_plan(args)
     selected_plan = select_items(plan, args.id)
     patterns = args.trigger_pattern or DEFAULT_PATTERNS
     results = []
     for item in selected_plan:
-        artifact = Path(str(item["artifact"]))
+        artifact = (
+            resolve_from(plan_dir, str(item["artifact"]))
+            if plan_dir is not None
+            else Path(str(item["artifact"]))
+        )
         observed, method, evidence = infer_trigger(artifact, patterns)
-        expected = bool(item["should_trigger"])
+        expected = expected_trigger(item.get("should_trigger"), str(item.get("id", "")))
         passed = observed == expected
         results.append(
             {

@@ -953,6 +953,42 @@ def test_trigger_eval_score_reads_jsonl_artifacts(root: Path) -> None:
     assert focused["selected_ids"] == [focused_item["id"]], focused
     assert focused["results"][0]["artifact"] == str(focused_artifact), focused
 
+    relative_dir = root / "relative-plan"
+    relative_dir.mkdir()
+    relative_artifact = relative_dir / "artifacts" / "relative.jsonl"
+    relative_artifact.parent.mkdir()
+    relative_artifact.write_text(json.dumps({"observed_trigger": False}) + "\n", encoding="utf-8")
+    relative_plan_path = relative_dir / "plan.json"
+    relative_plan_path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "relative-01",
+                    "should_trigger": "false",
+                    "focus": "relative",
+                    "artifact": "artifacts/relative.jsonl",
+                }
+            ],
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    relative = json.loads(
+        script(
+            SCORE_TRIGGER_EVALS,
+            "--plan",
+            str(relative_plan_path),
+            "--id",
+            "relative-01",
+            "--print-json",
+        ).stdout
+    )
+    assert relative["ok"] is True, relative
+    assert relative["results"][0]["expected_trigger"] is False, relative
+    assert relative["results"][0]["artifact"] == str(relative_artifact.resolve()), relative
+
 
 def test_shared_contract_matches_generated_routes(root: Path) -> None:
     assert START_WORK_CONTRACT.exists(), START_WORK_CONTRACT
