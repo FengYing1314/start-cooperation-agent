@@ -5,6 +5,7 @@ Use Codex thread mode when the project should keep an independent, reusable Mana
 ## Contents
 
 - Tool discovery
+- Non-destructive preflight
 - Project selection
 - Team initialization
 - Roster rules
@@ -35,6 +36,26 @@ If no tool exposes the current Manager thread id, do not infer or guess it. Use 
 
 If the tools remain unavailable, tell the user and ask before falling back to subagents.
 
+## Non-Destructive Preflight
+
+Use this path when the user asks to audit state, check readiness, review the call chain, or decide whether Codex App thread mode is possible. Preflight must not create threads, send messages, or inspect another role's conversation history as a substitute for direct handoffs.
+
+Allowed preflight actions:
+
+1. Confirm thread tools with `tool_search` if they are not already visible.
+2. Call `list_projects` and identify the project whose path exactly matches the current repo.
+3. Call `list_threads` only to locate already-named role threads or to verify an exact user-provided Manager thread id.
+4. Run `scripts/inspect_project.py --repo <repo-root> --print-json` and prefer its `team`, `latest_runs`, `pending_outbound`, and `next_actions` fields.
+5. Run `scripts/inspect_team.py --repo <repo-root> --print-json` when team readiness or route validity is the question.
+
+Forbidden in preflight:
+
+- do not call `create_thread` unless the user has asked to initialize, start, or replace a long-lived team thread;
+- do not call `send_message_to_thread` until there is a prepared payload or standing instruction that should really be delivered;
+- do not call `read_thread` unless this is recovery, audit on user request, or verification of an exact known thread.
+
+End preflight with a readiness summary: project match, available thread tools, known or missing Manager/Developer/Reviewer targets, ledger readiness, pending outbound sends, and the next safe command.
+
 ## Project Selection
 
 Use `list_projects` before creating long-lived role threads. Select the project that matches the current repository root. If multiple candidates match, prefer the one with the exact path.
@@ -45,7 +66,7 @@ For WSL projects, use the native Linux path in prompts even if the Codex app tar
 
 The current user-facing conversation is Manager unless the user assigns another coordinator.
 
-Create or confirm one long-lived Developer thread and one long-lived Reviewer thread per project. Do not create new Developer or Reviewer threads for each task.
+Create or confirm one long-lived Developer thread and one long-lived Reviewer thread per project only after the user has asked to initialize, start, reuse, or repair the team. If the user only asked for a status review, stop after preflight and structured ledger inspection. Do not create new Developer or Reviewer threads for each task.
 
 Recommended titles:
 

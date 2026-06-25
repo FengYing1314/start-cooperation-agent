@@ -760,6 +760,14 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "prepare_outbound_handoff.py" in codex_thread, codex_thread
     assert "finalize_outbound_handoff.py" in codex_thread, codex_thread
     assert "pending_outbound" in codex_thread, codex_thread
+    assert "## Non-Destructive Preflight" in codex_thread, codex_thread
+    assert "Allowed preflight actions" in codex_thread, codex_thread
+    assert "Forbidden in preflight" in codex_thread, codex_thread
+    assert "do not call `create_thread`" in codex_thread, codex_thread
+    assert "do not call `read_thread`" in codex_thread, codex_thread
+    assert "list_projects" in codex_thread, codex_thread
+    assert "list_threads" in codex_thread, codex_thread
+    assert "readiness summary" in codex_thread, codex_thread
     assert "record_inbound_handoff.py --kind reviewer_fix" in codex_thread, codex_thread
     assert "transport layer" in codex_thread, codex_thread
     assert "scripts/append_event.py --kind message --actor M" not in codex_thread, codex_thread
