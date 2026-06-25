@@ -21,7 +21,7 @@ def rel(path: Path) -> str:
 
 def run_step(label: str, command: list[str], *, command_timeout_seconds: float = 0.0) -> None:
     print(f"== {label}", flush=True)
-    print(" ".join(command), flush=True)
+    print(subprocess.list2cmdline(command), flush=True)
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     timeout = None if command_timeout_seconds <= 0 else command_timeout_seconds
@@ -34,7 +34,10 @@ def run_step(label: str, command: list[str], *, command_timeout_seconds: float =
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
-        print(f"Command timed out after {timeout}s: {exc.cmd}", flush=True)
+        print(
+            f"[{label}] Command timed out after {timeout}s: {subprocess.list2cmdline(list(exc.cmd) if isinstance(exc.cmd, list) else [str(exc.cmd)])}",
+            flush=True,
+        )
         raise SystemExit(1)
     if proc.returncode != 0:
         raise SystemExit(proc.returncode)

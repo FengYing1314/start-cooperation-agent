@@ -93,7 +93,7 @@ def run(
         )
     except subprocess.TimeoutExpired as exc:
         raise AssertionError(
-            f"Command timed out after {timeout}s: {' '.join(command)}"
+            f"Command timed out after {timeout}s: {subprocess.list2cmdline(command)}"
         ) from exc
     if check and proc.returncode != 0:
         raise AssertionError(
