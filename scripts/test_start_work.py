@@ -23,6 +23,7 @@ START_WORK_CONTRACT = SCRIPT_DIR / "start_work_contract.py"
 VALIDATE_START_WORK = SCRIPT_DIR / "validate_start_work.py"
 PLAN_TRIGGER_EVALS = SCRIPT_DIR / "plan_trigger_evals.py"
 SCORE_TRIGGER_EVALS = SCRIPT_DIR / "score_trigger_evals.py"
+PREPARE_TRIGGER_EVAL_WORKSPACE = SCRIPT_DIR / "prepare_trigger_eval_workspace.py"
 SKILL_ROOT = SCRIPT_DIR.parent
 
 
@@ -757,6 +758,7 @@ def test_trigger_eval_prompts_are_balanced(root: Path) -> None:
     assert {"explicit", "implicit", "contextual", "tiny-task", "skill-authoring"} <= focuses, focuses
     assert any("$start-work" in row["prompt"] for row in rows if row["should_trigger"] == "true"), rows
     assert any("No multi-agent workflow needed" in row["prompt"] for row in rows if row["should_trigger"] == "false"), rows
+    assert "prepare_trigger_eval_workspace.py --output-dir" in text, text
     assert "plan_trigger_evals.py --print-json" in text, text
     assert "score_trigger_evals.py --print-json" in text, text
     assert "Expected behavior:" in text, text
@@ -775,6 +777,24 @@ def test_trigger_eval_plan_is_stable(root: Path) -> None:
     assert first["artifact"].endswith("trig-01-explicit.jsonl"), first
     assert "$start-work" in first["prompt"], first
     assert ">" in first["shell"], first
+
+
+def test_prepare_trigger_eval_workspace(root: Path) -> None:
+    assert PREPARE_TRIGGER_EVAL_WORKSPACE.exists(), PREPARE_TRIGGER_EVAL_WORKSPACE
+    output_dir = root / "fixture"
+    result = json.loads(
+        script(PREPARE_TRIGGER_EVAL_WORKSPACE, "--output-dir", str(output_dir), "--print-json").stdout
+    )
+    repo = Path(result["repo"])
+    plan_path = Path(result["plan"])
+    assert repo.exists(), result
+    assert (repo / "AGENTS.md").exists(), result
+    assert (repo / "README.md").exists(), result
+    assert (repo / "src" / "parser.py").exists(), result
+    assert (repo / ".git").exists(), result
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    assert result["prompt_count"] == len(plan), result
+    assert all(Path(item["artifact"]).parent == Path(result["artifact_dir"]) for item in plan), plan
 
 
 def test_trigger_eval_score_reads_jsonl_artifacts(root: Path) -> None:
@@ -898,6 +918,7 @@ def main() -> int:
         test_reference_routing_is_progressive,
         test_trigger_eval_prompts_are_balanced,
         test_trigger_eval_plan_is_stable,
+        test_prepare_trigger_eval_workspace,
         test_trigger_eval_score_reads_jsonl_artifacts,
         test_shared_contract_matches_generated_routes,
         test_protocol_status_docs_match_contract,
