@@ -9,7 +9,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -45,6 +45,18 @@ def import_contract_module():
         except ValueError:
             pass
     return start_work_contract
+
+
+def import_drill_module():
+    sys.path.insert(0, str(SCRIPT_DIR))
+    try:
+        import plan_codex_thread_drill
+    finally:
+        try:
+            sys.path.remove(str(SCRIPT_DIR))
+        except ValueError:
+            pass
+    return plan_codex_thread_drill
 
 
 def run(command: list[str], *, check: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -305,6 +317,45 @@ def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> Non
     assert "Ready For Live Drill: false" in text_result.stdout, text_result.stdout
     assert "Requires Explicit Live Drill Approval: true" in text_result.stdout, text_result.stdout
     assert "Codex Project Match Checked: false" in text_result.stdout, text_result.stdout
+
+
+def test_codex_project_match_accepts_wsl_and_mount_equivalent_paths(root: Path) -> None:
+    drill = import_drill_module()
+    wsl_repo = PurePosixPath("/home/fengying/projects/weeksir/weeksir-frontend")
+    wsl_match = drill.codex_project_match(
+        wsl_repo,
+        [
+            {
+                "project_id": "frontend",
+                "path": r"\\wsl.localhost\Ubuntu-26.04\home\fengying\projects\weeksir\weeksir-frontend",
+            }
+        ],
+    )
+    assert wsl_match["matched"] is True, wsl_match
+    assert wsl_match["matches"][0]["project_id"] == "frontend", wsl_match
+
+    wsl_dollar_match = drill.codex_project_match(
+        wsl_repo,
+        [
+            {
+                "project_id": "frontend-alt",
+                "path": r"\\wsl$\Ubuntu-26.04\home\fengying\projects\weeksir\weeksir-frontend",
+            }
+        ],
+    )
+    assert wsl_dollar_match["matched"] is True, wsl_dollar_match
+
+    mounted_windows_match = drill.codex_project_match(
+        PurePosixPath("/mnt/c/Users/admin/project"),
+        [{"project_id": "windows-project", "path": r"C:\Users\admin\project"}],
+    )
+    assert mounted_windows_match["matched"] is True, mounted_windows_match
+
+    non_match = drill.codex_project_match(
+        wsl_repo,
+        [{"project_id": "backend", "path": r"\\wsl.localhost\Ubuntu-26.04\home\fengying\projects\weeksir\backend"}],
+    )
+    assert non_match["matched"] is False, non_match
 
 
 def test_project_inspection_summarizes_team_and_recent_runs(root: Path) -> None:
@@ -812,6 +863,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "plan_codex_thread_drill.py" in skill, skill
     assert "--codex-project" in skill, skill
     assert "ledger_ready_for_live_drill" in skill, skill
+    assert "WSL UNC and native Linux path forms" in skill, skill
     assert "prepare_outbound_handoff.py" in skill, skill
     assert "finalize_outbound_handoff.py" in skill, skill
     assert "record_inbound_handoff.py" in skill, skill
@@ -877,6 +929,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "codex_project_match" in codex_thread, codex_thread
     assert "--codex-project" in codex_thread, codex_thread
     assert "ledger_ready_for_live_drill" in codex_thread, codex_thread
+    assert "WSL UNC paths" in codex_thread, codex_thread
     assert "ready_for_live_drill=true" in codex_thread, codex_thread
     assert "Allowed preflight actions" in codex_thread, codex_thread
     assert "Forbidden in preflight" in codex_thread, codex_thread
@@ -2649,6 +2702,7 @@ def main() -> int:
         test_team_inspection_rejects_broken_handoff_route,
         test_project_inspection_guides_preflight_without_team,
         test_codex_thread_drill_plan_preserves_live_approval_gate,
+        test_codex_project_match_accepts_wsl_and_mount_equivalent_paths,
         test_project_inspection_summarizes_team_and_recent_runs,
         test_callback_only_rejected_for_direct_thread_mode,
         test_direct_thread_happy_path,

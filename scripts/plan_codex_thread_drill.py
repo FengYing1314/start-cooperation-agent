@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,26 @@ def command(script_name: str, *args: str) -> list[str]:
 
 
 def normalize_path_text(value: str) -> str:
-    return value.strip().replace("/", "\\").rstrip("\\").casefold()
+    return value.strip().replace("\\", "/").rstrip("/").casefold()
+
+
+def path_match_keys(value: str) -> set[str]:
+    normalized = normalize_path_text(value)
+    keys = {normalized} if normalized else set()
+
+    parts = normalized.split("/")
+    if len(parts) > 4 and parts[0] == "" and parts[1] == "" and parts[2] in {"wsl.localhost", "wsl$"}:
+        keys.add("/" + "/".join(parts[4:]))
+
+    drive_match = re.match(r"^([a-z]):/(.+)$", normalized)
+    if drive_match:
+        keys.add(f"/mnt/{drive_match.group(1)}/{drive_match.group(2)}")
+
+    mount_match = re.match(r"^/mnt/([a-z])/(.+)$", normalized)
+    if mount_match:
+        keys.add(f"{mount_match.group(1)}:/{mount_match.group(2)}")
+
+    return keys
 
 
 def parse_codex_project_entries(entries: list[str]) -> list[dict[str, str]]:
@@ -40,12 +60,12 @@ def parse_codex_project_entries(entries: list[str]) -> list[dict[str, str]]:
 
 def codex_project_match(repo: Path, codex_projects: list[dict[str, str]]) -> dict[str, object]:
     repo_text = str(repo)
-    repo_norm = normalize_path_text(repo_text)
+    repo_keys = path_match_keys(repo_text)
     matches = [
         project
         for project in codex_projects
-        if normalize_path_text(project.get("path", "")) == repo_norm
-        or normalize_path_text(project.get("project_id", "")) == repo_norm
+        if repo_keys.intersection(path_match_keys(project.get("path", "")))
+        or repo_keys.intersection(path_match_keys(project.get("project_id", "")))
     ]
     return {
         "required_for_live_drill": True,
