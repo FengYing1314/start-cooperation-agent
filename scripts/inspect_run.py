@@ -95,19 +95,35 @@ def latest_reviewer_fix_send_state(run_dir: Path, events: list[dict[str, object]
             continue
         if event.get("run_status") != "review_done":
             continue
+        event_id = str(event.get("id", "")).strip()
         file_name = str(event.get("file", "")).strip()
         if not file_name:
-            continue
+            return {
+                "event_id": event_id,
+                "file": "",
+                "next_handoff_sent": "unknown",
+                "problems": [f"Reviewer fix event {event_id} does not reference a payload file."],
+            }
         payload_path = run_dir / file_name
         if not payload_path.exists():
-            continue
+            return {
+                "event_id": event_id,
+                "file": file_name,
+                "next_handoff_sent": "unknown",
+                "problems": [f"Missing reviewer_fix payload file: {file_name}"],
+            }
         payload_text = payload_path.read_text(encoding="utf-8")
         validation = validate_payload("reviewer_fix", payload_text)
         if not validation["ok"]:
-            continue
+            return {
+                "event_id": event_id,
+                "file": file_name,
+                "next_handoff_sent": "unknown",
+                "problems": [str(problem) for problem in validation.get("problems", [])],
+            }
         sent_word = next_handoff_sent_word(payload_text)
         return {
-            "event_id": event.get("id", ""),
+            "event_id": event_id,
             "file": file_name,
             "next_handoff_sent": sent_word,
         }
@@ -258,6 +274,13 @@ def next_actions(
     if current_status == "review_done":
         if reviewer_fix_send_state:
             sent_word = str(reviewer_fix_send_state.get("next_handoff_sent", ""))
+            state_problems = reviewer_fix_send_state.get("problems", [])
+            if sent_word == "unknown" or state_problems:
+                return [
+                    "Latest reviewer_fix copy cannot prove whether the D1 fix handoff was sent.",
+                    "Repair or recover the exact reviewer_fix payload before appending fix_required or developer_fix_running.",
+                    "Use reviewer_fix_send_state.problems for the missing or invalid evidence.",
+                ]
             if sent_word == "no":
                 return [
                     "Latest reviewer_fix copy says Next handoff sent: no.",

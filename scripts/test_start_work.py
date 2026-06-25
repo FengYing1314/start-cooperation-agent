@@ -1628,6 +1628,74 @@ no, D1 thread dev-thread is the unsent target.
         project_unsent_runs[0]
     )
 
+    reviewer_fix_bad_run = json.loads(
+        script(
+            INIT_RUN,
+            "--repo",
+            str(repo),
+            "--slug",
+            "inbound-reviewer-fix-bad-payload",
+            "--request",
+            "test inbound reviewer fix copy with invalid evidence",
+            "--print-json",
+        ).stdout
+    )
+    reviewer_fix_bad_run_dir = Path(str(reviewer_fix_bad_run["run_dir"]))
+    for actor, to, thread_id, run_status, summary in [
+        ("M", "D1", "dev-thread", "manager_work_order", "work order recorded"),
+        ("M", "D1", "dev-thread", "developer_running", "work order sent"),
+        ("D1", "M", "manager-thread", "developer_done", "developer done"),
+        ("M", "", "", "main_integration_check", "manager checkpoint"),
+        ("M", "R1", "review-thread", "reviewer_running", "review request sent"),
+    ]:
+        append_status(
+            reviewer_fix_bad_run_dir,
+            actor=actor,
+            to=to,
+            thread_id=thread_id,
+            run_status=run_status,
+            summary=summary,
+        )
+    bad_payload_event = json.loads(
+        script(
+            APPEND_EVENT,
+            "--run-dir",
+            str(reviewer_fix_bad_run_dir),
+            "--kind",
+            "message",
+            "--actor",
+            "R1",
+            "--to",
+            "D1",
+            "--thread-id",
+            "dev-thread",
+            "--summary",
+            "broken reviewer fix copy",
+            "--run-status",
+            "review_done",
+            "--body",
+            "Broken reviewer fix copy without required labels.",
+            "--print-json",
+        ).stdout
+    )
+    bad_inspected = json.loads(inspect_run(reviewer_fix_bad_run_dir).stdout)
+    assert bad_inspected["current_status"] == "review_done", bad_inspected
+    assert bad_inspected["reviewer_fix_send_state"]["event_id"] == bad_payload_event["id"], bad_inspected
+    assert bad_inspected["reviewer_fix_send_state"]["next_handoff_sent"] == "unknown", bad_inspected
+    assert bad_inspected["reviewer_fix_send_state"]["problems"], bad_inspected
+    assert any("cannot prove" in item for item in bad_inspected["next_actions"]), bad_inspected
+    assert any("before appending fix_required" in item for item in bad_inspected["next_actions"]), bad_inspected
+    assert not any(item.startswith("If accepted") for item in bad_inspected["next_actions"]), bad_inspected
+    project_after_bad = json.loads(inspect_project(repo, "--limit", "10").stdout)
+    project_bad_runs = [
+        item
+        for item in project_after_bad["latest_runs"]
+        if item.get("run_id") == reviewer_fix_bad_run["run_id"]
+    ]
+    assert len(project_bad_runs) == 1, project_after_bad
+    assert project_bad_runs[0]["reviewer_fix_send_state"]["next_handoff_sent"] == "unknown", project_bad_runs[0]
+    assert any("cannot prove" in item for item in project_bad_runs[0]["next_actions"]), project_bad_runs[0]
+
     accepted_run = json.loads(
         script(
             INIT_RUN,
