@@ -215,6 +215,18 @@ def test_team_inspection_rejects_broken_handoff_route(root: Path) -> None:
     assert any("R1->D1" in problem for problem in data["problems"]), data
 
 
+def test_project_inspection_guides_preflight_without_team(root: Path) -> None:
+    repo = make_repo(root, "project-preflight")
+    proc = inspect_project(repo, check=False)
+    combined = proc.stdout + proc.stderr
+    assert proc.returncode != 0, combined
+    summary = json.loads(proc.stdout)
+    assert summary["ok"] is False, summary
+    assert any("non-destructive Codex App preflight" in item for item in summary["next_actions"]), summary
+    assert any("before creating threads or sending messages" in item for item in summary["next_actions"]), summary
+    assert any(problem["scope"] == "team" for problem in summary["problems"]), summary
+
+
 def test_project_inspection_summarizes_team_and_recent_runs(root: Path) -> None:
     repo = make_repo(root, "project-inspection")
     init_team(
@@ -2073,6 +2085,7 @@ def main() -> int:
         test_team_id_is_stable,
         test_team_inspection_requires_acknowledgements,
         test_team_inspection_rejects_broken_handoff_route,
+        test_project_inspection_guides_preflight_without_team,
         test_project_inspection_summarizes_team_and_recent_runs,
         test_callback_only_rejected_for_direct_thread_mode,
         test_direct_thread_happy_path,

@@ -38,9 +38,14 @@ def compact_run(summary: dict[str, object]) -> dict[str, object]:
 def next_actions(team: dict[str, object], latest_runs: list[dict[str, object]]) -> list[str]:
     team_actions = team.get("next_actions", [])
     if not team.get("ok"):
+        actions = [
+            "Run the non-destructive Codex App preflight in references/codex-thread-mode.md before creating threads or sending messages.",
+        ]
         if isinstance(team_actions, list) and team_actions:
-            return [str(item) for item in team_actions]
-        return ["Fix team readiness before starting or resuming codex-thread runs."]
+            actions.extend(str(item) for item in team_actions)
+            return actions
+        actions.append("Fix team readiness before starting or resuming codex-thread runs.")
+        return actions
 
     if latest_runs:
         latest = latest_runs[0]
