@@ -792,6 +792,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "readiness summary" in codex_thread, codex_thread
     assert "Codex CLI is not a substitute for Codex App thread transport" in codex_thread, codex_thread
     assert "do not use `codex exec`/`resume` as proof" in codex_thread, codex_thread
+    assert "If it starts with `no`" in codex_thread, codex_thread
+    assert "do not mark `fix_required` or `developer_fix_running`" in codex_thread, codex_thread
     assert "record_inbound_handoff.py --kind reviewer_fix" in codex_thread, codex_thread
     assert "transport layer" in codex_thread, codex_thread
     assert "scripts/append_event.py --kind message --actor M" not in codex_thread, codex_thread
@@ -827,6 +829,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "next_commands" in protocol, protocol
     assert "next_actions" in protocol, protocol
     assert "pending_outbound" in protocol, protocol
+    assert "When it starts with `no`" in protocol, protocol
+    assert "do not record `fix_required` or `developer_fix_running`" in protocol, protocol
     assert "updates `run.json` with the current status and last event" in protocol, protocol
     assert "records both its event status and run status" in protocol, protocol
     assert "full fix-review loop as an executable invariant" in protocol, protocol
@@ -1510,6 +1514,86 @@ yes, D1 thread dev-thread.
     assert running_followup["run_status"] == "developer_fix_running", running_followup
     reviewer_fix_after_followup = json.loads(inspect_run(reviewer_fix_run_dir).stdout)
     assert reviewer_fix_after_followup["current_status"] == "developer_fix_running", reviewer_fix_after_followup
+
+    reviewer_fix_unsent_run = json.loads(
+        script(
+            INIT_RUN,
+            "--repo",
+            str(repo),
+            "--slug",
+            "inbound-reviewer-fix-unsent",
+            "--request",
+            "test inbound reviewer fix copy without D1 send",
+            "--print-json",
+        ).stdout
+    )
+    reviewer_fix_unsent_run_dir = Path(str(reviewer_fix_unsent_run["run_dir"]))
+    for actor, to, thread_id, run_status, summary in [
+        ("M", "D1", "dev-thread", "manager_work_order", "work order recorded"),
+        ("M", "D1", "dev-thread", "developer_running", "work order sent"),
+        ("D1", "M", "manager-thread", "developer_done", "developer done"),
+        ("M", "", "", "main_integration_check", "manager checkpoint"),
+        ("M", "R1", "review-thread", "reviewer_running", "review request sent"),
+    ]:
+        append_status(
+            reviewer_fix_unsent_run_dir,
+            actor=actor,
+            to=to,
+            thread_id=thread_id,
+            run_status=run_status,
+            summary=summary,
+        )
+    reviewer_fix_unsent_payload = root / "reviewer-fix-copy-unsent.md"
+    reviewer_fix_unsent_payload.write_text(
+        """Start-work fix handoff R1-001
+Run ID: 20260101-000004-inbound-reviewer-fix-unsent
+Team ID: team-inbound
+From: R1
+To: D1
+Manager copy: M
+Status: changes required
+
+Blocking findings:
+Blank input still fails.
+
+Allowed fix scope:
+src/parser.py
+
+Do not change:
+Public API.
+
+Checks or evidence:
+python -m pytest tests/test_parser.py
+
+Requested next action:
+Fix only the blocking findings, then hand off to Manager for checkpoint.
+
+Next handoff sent:
+no, D1 thread dev-thread is the unsent target.
+""",
+        encoding="utf-8",
+    )
+    reviewer_fix_unsent_recorded = json.loads(
+        script(
+            RECORD_INBOUND_HANDOFF,
+            "--run-dir",
+            str(reviewer_fix_unsent_run_dir),
+            "--kind",
+            "reviewer_fix",
+            "--body-file",
+            str(reviewer_fix_unsent_payload),
+            "--print-json",
+        ).stdout
+    )
+    assert reviewer_fix_unsent_recorded["ok"] is True, reviewer_fix_unsent_recorded
+    assert reviewer_fix_unsent_recorded["recorded_run_status"] == "review_done", reviewer_fix_unsent_recorded
+    assert reviewer_fix_unsent_recorded["event"]["thread_id"] == "", reviewer_fix_unsent_recorded
+    assert reviewer_fix_unsent_recorded["followup_status_commands"] == [], reviewer_fix_unsent_recorded
+    assert any("before recording fix_required" in item for item in reviewer_fix_unsent_recorded["next_actions"]), (
+        reviewer_fix_unsent_recorded
+    )
+    reviewer_fix_unsent_inspected = json.loads(inspect_run(reviewer_fix_unsent_run_dir).stdout)
+    assert reviewer_fix_unsent_inspected["current_status"] == "review_done", reviewer_fix_unsent_inspected
 
     accepted_run = json.loads(
         script(

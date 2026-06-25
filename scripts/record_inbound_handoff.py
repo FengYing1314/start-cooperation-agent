@@ -108,6 +108,13 @@ def payload_msg_id(text: str) -> str:
     return ""
 
 
+def next_handoff_sent_word(text: str) -> str:
+    value = extract_label(text, "Next handoff sent")[1]
+    if not value:
+        return ""
+    return value.split(None, 1)[0].strip(".,;:").lower()
+
+
 def roster_thread_id(run_dir: Path, role: str) -> str:
     metadata = load_json(run_dir / "run.json")
     team = metadata.get("team", {})
@@ -212,7 +219,10 @@ def record(args: argparse.Namespace) -> dict[str, Any]:
             "next_actions": ["Repair the payload status before recording this handoff."],
         }
 
+    sent_word = next_handoff_sent_word(body)
     thread_id = args.thread_id.strip() or roster_thread_id(run_dir, spec["to"])
+    if args.kind == "reviewer_fix" and sent_word == "no":
+        thread_id = args.thread_id.strip()
     event_args = [
         "--run-dir",
         str(run_dir),
@@ -241,6 +251,11 @@ def record(args: argparse.Namespace) -> dict[str, Any]:
     event = append_event(event_args)
     followups = followup_status_commands(run_dir, spec)
     next_actions = [spec["next_action"]]
+    if args.kind == "reviewer_fix" and sent_word == "no":
+        followups = []
+        next_actions = [
+            "Reviewer fix copy says Next handoff sent: no; send or relay the exact fix payload to D1 before recording fix_required or developer_fix_running.",
+        ]
     if not followups and run_status == "blocked":
         next_actions = ["Report the blocker and stop the loop until the blocking condition changes."]
     return {

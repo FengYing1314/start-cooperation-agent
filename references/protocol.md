@@ -90,7 +90,7 @@ Use `scripts/finalize_outbound_handoff.py --run-dir <run-dir> --kind <outbound-k
 
 Use `scripts/record_inbound_handoff.py --run-dir <run-dir> --kind <inbound-kind> --body-file <payload.md> --print-json` after receiving a direct Codex App thread handoff from Developer or Reviewer. It validates and records the exact received payload, advances only the safe receipt status, and returns LLM-readable follow-up commands for Manager-owned checkpoints, Reviewer fix copies, or acceptance decisions.
 
-Inbound `reviewer_fix` means Manager received the Manager copy of a direct R1 -> D1 blocking fix handoff. Record it as the review result, then run the returned follow-up commands in order only when the copy confirms the direct D1 handoff happened.
+Inbound `reviewer_fix` means Manager received the Manager copy of a direct R1 -> D1 blocking fix handoff. Record it as the review result. When `Next handoff sent:` starts with `yes`, run the returned follow-up commands in order. When it starts with `no`, do not record `fix_required` or `developer_fix_running` until the exact fix payload is really sent or relayed to D1.
 
 Use `scripts/validate_handoff.py --kind <handoff-kind> --body-file <payload.md> --print-json` for other received or manually relayed work orders, review requests, fix requests, completions, or acceptance payloads when practical. It checks required labels, role direction, allowed status values, unresolved placeholders, and returns LLM-readable `next_actions`.
 
