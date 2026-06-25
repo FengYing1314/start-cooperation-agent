@@ -22,6 +22,7 @@ INSPECT_PROJECT = SCRIPT_DIR / "inspect_project.py"
 START_WORK_CONTRACT = SCRIPT_DIR / "start_work_contract.py"
 VALIDATE_START_WORK = SCRIPT_DIR / "validate_start_work.py"
 PLAN_TRIGGER_EVALS = SCRIPT_DIR / "plan_trigger_evals.py"
+SCORE_TRIGGER_EVALS = SCRIPT_DIR / "score_trigger_evals.py"
 SKILL_ROOT = SCRIPT_DIR.parent
 
 
@@ -757,6 +758,7 @@ def test_trigger_eval_prompts_are_balanced(root: Path) -> None:
     assert any("$start-work" in row["prompt"] for row in rows if row["should_trigger"] == "true"), rows
     assert any("No multi-agent workflow needed" in row["prompt"] for row in rows if row["should_trigger"] == "false"), rows
     assert "plan_trigger_evals.py --print-json" in text, text
+    assert "score_trigger_evals.py --print-json" in text, text
     assert "Expected behavior:" in text, text
 
 
@@ -773,6 +775,32 @@ def test_trigger_eval_plan_is_stable(root: Path) -> None:
     assert first["artifact"].endswith("trig-01-explicit.jsonl"), first
     assert "$start-work" in first["prompt"], first
     assert ">" in first["shell"], first
+
+
+def test_trigger_eval_score_reads_jsonl_artifacts(root: Path) -> None:
+    assert SCORE_TRIGGER_EVALS.exists(), SCORE_TRIGGER_EVALS
+    artifact_dir = root / "evals"
+    plan = json.loads(script(PLAN_TRIGGER_EVALS, "--artifact-dir", str(artifact_dir), "--print-json").stdout)
+    for item in plan:
+        artifact = Path(item["artifact"])
+        artifact.parent.mkdir(parents=True, exist_ok=True)
+        if item["should_trigger"]:
+            artifact.write_text(json.dumps({"start_work_triggered": True}) + "\n", encoding="utf-8")
+        else:
+            artifact.write_text(json.dumps({"observed_trigger": False}) + "\n", encoding="utf-8")
+
+    scored = json.loads(script(SCORE_TRIGGER_EVALS, "--artifact-dir", str(artifact_dir), "--print-json").stdout)
+    assert scored["ok"] is True, scored
+    assert scored["passed"] == len(plan), scored
+    assert scored["failed"] == 0, scored
+
+    bad_artifact = Path(plan[-1]["artifact"])
+    bad_artifact.write_text(json.dumps({"start_work_triggered": True}) + "\n", encoding="utf-8")
+    failed = script(SCORE_TRIGGER_EVALS, "--artifact-dir", str(artifact_dir), "--print-json", check=False)
+    assert failed.returncode != 0, failed.stdout
+    failed_summary = json.loads(failed.stdout)
+    assert failed_summary["ok"] is False, failed_summary
+    assert failed_summary["failed"] == 1, failed_summary
 
 
 def test_shared_contract_matches_generated_routes(root: Path) -> None:
@@ -870,6 +898,7 @@ def main() -> int:
         test_reference_routing_is_progressive,
         test_trigger_eval_prompts_are_balanced,
         test_trigger_eval_plan_is_stable,
+        test_trigger_eval_score_reads_jsonl_artifacts,
         test_shared_contract_matches_generated_routes,
         test_protocol_status_docs_match_contract,
     ]
