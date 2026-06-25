@@ -2864,6 +2864,12 @@ def main() -> int:
         help="Run only the named tests (comma-separated and repeatable).",
     )
     parser.add_argument("--profile", action="store_true", help="Print per-test runtime in seconds.")
+    parser.add_argument(
+        "--max-test-seconds",
+        type=float,
+        default=0.0,
+        help="Fail if any selected test runtime exceeds this many seconds (0 to disable).",
+    )
     args = parser.parse_args()
 
     test_by_name = {test.__name__: test for test in ALL_TESTS}
@@ -2904,6 +2910,8 @@ def main() -> int:
     timings = []
     with tempfile.TemporaryDirectory(prefix="start-work-tests-") as temp:
         root = Path(temp)
+        slow_limit = args.max_test_seconds if args.max_test_seconds > 0 else None
+        slow_failures: list[tuple[str, float]] = []
         for test in tests:
             start = time.perf_counter()
             test(root)
@@ -2911,13 +2919,21 @@ def main() -> int:
             if args.profile:
                 print(f"TIME {elapsed:0.3f}s {test.__name__}")
             timings.append((test.__name__, elapsed))
+            if slow_limit is not None and elapsed > slow_limit:
+                slow_failures.append((test.__name__, elapsed))
+                print(f"SLOW {elapsed:0.3f}s > {slow_limit:0.3f}s: {test.__name__}")
             print(f"PASS {test.__name__}")
 
-    if args.profile:
-        slowest = sorted(timings, key=lambda item: item[1], reverse=True)
-        print("SLOWEST TESTS")
-        for name, elapsed in slowest[:10]:
-            print(f"  {elapsed:0.3f}s  {name}")
+        if args.profile:
+            slowest = sorted(timings, key=lambda item: item[1], reverse=True)
+            print("SLOWEST TESTS")
+            for name, elapsed in slowest[:10]:
+                print(f"  {elapsed:0.3f}s  {name}")
+        if slow_failures:
+            failures = [f"{name} ({elapsed:0.3f}s)" for name, elapsed in slow_failures]
+            raise AssertionError(
+                "Test runtime exceeded max_test_seconds:\n- " + "\n- ".join(failures)
+            )
     return 0
 
 

@@ -79,6 +79,12 @@ def main() -> int:
         help="Pass only these tests to test_start_work by name (comma-separated and repeatable).",
     )
     parser.add_argument(
+        "--max-test-seconds",
+        type=float,
+        default=0.0,
+        help="Fail if any selected test runtime exceeds this many seconds (0 to disable).",
+    )
+    parser.add_argument(
         "--list-tests",
         action="store_true",
         help="Print available test names from test_start_work and exit.",
@@ -109,6 +115,8 @@ def main() -> int:
     if args.tests:
         for name in split_test_names(args.tests):
             test_command.extend(["--only", name])
+    if args.max_test_seconds:
+        test_command.extend(["--max-test-seconds", str(args.max_test_seconds)])
     if args.profile:
         test_command.append("--profile")
     run_step("smoke tests", test_command)
