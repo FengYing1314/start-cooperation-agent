@@ -814,6 +814,31 @@ def test_prepare_trigger_eval_workspace(root: Path) -> None:
     assert commands["score"][commands["score"].index("--plan") + 1] == str(plan_path), commands
     assert commands["focused_run"][-2:] == ["--id", "<eval-id>"], commands
     assert commands["focused_score"][-2:] == ["--id", "<eval-id>"], commands
+    assert result["artifacts_cleaned"] is True, result
+
+    stale = Path(result["artifact_dir"]) / "stale.jsonl"
+    stale.write_text(json.dumps({"start_work_triggered": True}) + "\n", encoding="utf-8")
+    refreshed = json.loads(
+        script(PREPARE_TRIGGER_EVAL_WORKSPACE, "--output-dir", str(output_dir), "--print-json").stdout
+    )
+    assert refreshed["artifacts_cleaned"] is True, refreshed
+    assert refreshed["removed_artifact_entries"] >= 1, refreshed
+    assert not stale.exists(), stale
+
+    kept_stale = Path(refreshed["artifact_dir"]) / "kept.jsonl"
+    kept_stale.write_text(json.dumps({"start_work_triggered": True}) + "\n", encoding="utf-8")
+    kept = json.loads(
+        script(
+            PREPARE_TRIGGER_EVAL_WORKSPACE,
+            "--output-dir",
+            str(output_dir),
+            "--keep-artifacts",
+            "--print-json",
+        ).stdout
+    )
+    assert kept["artifacts_cleaned"] is False, kept
+    assert kept["removed_artifact_entries"] == 0, kept
+    assert kept_stale.exists(), kept_stale
 
 
 def test_trigger_eval_runner_respects_cwd_and_artifact(root: Path) -> None:
