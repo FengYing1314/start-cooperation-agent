@@ -21,6 +21,7 @@ INSPECT_RUN = SCRIPT_DIR / "inspect_run.py"
 INSPECT_PROJECT = SCRIPT_DIR / "inspect_project.py"
 START_WORK_CONTRACT = SCRIPT_DIR / "start_work_contract.py"
 VALIDATE_START_WORK = SCRIPT_DIR / "validate_start_work.py"
+CHECK_TRIGGER_EVAL_CLI = SCRIPT_DIR / "check_trigger_eval_cli.py"
 PLAN_TRIGGER_EVALS = SCRIPT_DIR / "plan_trigger_evals.py"
 SCORE_TRIGGER_EVALS = SCRIPT_DIR / "score_trigger_evals.py"
 PREPARE_TRIGGER_EVAL_WORKSPACE = SCRIPT_DIR / "prepare_trigger_eval_workspace.py"
@@ -697,6 +698,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "inspect_team.py" in skill, skill
     assert "inspect_run.py" in skill, skill
     assert "inspect_project.py" in skill, skill
+    assert "check_trigger_eval_cli.py" in skill, skill
     assert "run_trigger_eval_plan.py" in skill, skill
     assert "start_work_contract.py" in skill, skill
     assert "validate_start_work.py" in skill, skill
@@ -790,11 +792,45 @@ def test_trigger_eval_prompts_are_balanced(root: Path) -> None:
     assert "prepare_trigger_eval_workspace.py --output-dir" in text, text
     assert "next_commands" in text, text
     assert "next_actions" in text, text
+    assert "cli_check" in text, text
     assert "do not run eval and score in parallel" in text, text
     assert "run_trigger_eval_plan.py --plan" in text, text
     assert "score_trigger_evals.py --plan" in text, text
     assert "Empty artifacts, runner errors, and timeouts are inconclusive failures" in text, text
     assert "Expected behavior:" in text, text
+
+
+def test_trigger_eval_cli_check_reports_launchability(root: Path) -> None:
+    assert CHECK_TRIGGER_EVAL_CLI.exists(), CHECK_TRIGGER_EVAL_CLI
+    ok = json.loads(
+        script(
+            CHECK_TRIGGER_EVAL_CLI,
+            "--codex-bin",
+            sys.executable,
+            "--cwd",
+            str(root),
+            "--print-json",
+        ).stdout
+    )
+    assert ok["ok"] is True, ok
+    assert ok["returncode"] == 0, ok
+    assert ok["command"] == [sys.executable, "--version"], ok
+    assert any("dry_run" in item for item in ok["next_actions"]), ok
+
+    missing = script(
+        CHECK_TRIGGER_EVAL_CLI,
+        "--codex-bin",
+        "definitely-missing-start-work-codex-bin",
+        "--cwd",
+        str(root),
+        "--print-json",
+        check=False,
+    )
+    assert missing.returncode != 0, missing.stdout
+    missing_summary = json.loads(missing.stdout)
+    assert missing_summary["ok"] is False, missing_summary
+    assert "Executable not found" in missing_summary["error"], missing_summary
+    assert any("--codex-bin" in item for item in missing_summary["next_actions"]), missing_summary
 
 
 def test_trigger_eval_plan_is_stable(root: Path) -> None:
@@ -833,11 +869,14 @@ def test_prepare_trigger_eval_workspace(root: Path) -> None:
     assert all(Path(item["artifact"]).parent == Path(result["artifact_dir"]) for item in plan), plan
     assert all(item["cwd"] == str(repo) for item in plan), plan
     commands = result["next_commands"]
+    assert commands["cli_check"][1].endswith("check_trigger_eval_cli.py"), commands
+    assert commands["cli_check"][commands["cli_check"].index("--cwd") + 1] == str(repo), commands
     assert commands["dry_run"][-1] == "--dry-run", commands
     assert commands["run"][commands["run"].index("--plan") + 1] == str(plan_path), commands
     assert commands["score"][commands["score"].index("--plan") + 1] == str(plan_path), commands
     assert commands["focused_run"][-2:] == ["--id", "<eval-id>"], commands
     assert commands["focused_score"][-2:] == ["--id", "<eval-id>"], commands
+    assert any("cli_check" in item for item in result["next_actions"]), result
     assert any("do not run eval and score in parallel" in item for item in result["next_actions"]), result
     assert result["artifacts_cleaned"] is True, result
 
@@ -1213,6 +1252,7 @@ def main() -> int:
         test_fallback_mode_requires_reason,
         test_reference_routing_is_progressive,
         test_trigger_eval_prompts_are_balanced,
+        test_trigger_eval_cli_check_reports_launchability,
         test_trigger_eval_plan_is_stable,
         test_prepare_trigger_eval_workspace,
         test_trigger_eval_runner_respects_cwd_and_artifact,

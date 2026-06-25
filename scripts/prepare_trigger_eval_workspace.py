@@ -35,12 +35,22 @@ PARSER_PY = """def parse(value):
 """
 
 
-def next_commands(plan_path: Path) -> dict[str, list[str]]:
+def next_commands(plan_path: Path, *, repo: Path, codex_bin: str) -> dict[str, list[str]]:
+    checker = SCRIPT_DIR / "check_trigger_eval_cli.py"
     runner = SCRIPT_DIR / "run_trigger_eval_plan.py"
     scorer = SCRIPT_DIR / "score_trigger_evals.py"
     base_run = [sys.executable, str(runner), "--plan", str(plan_path), "--print-json"]
     base_score = [sys.executable, str(scorer), "--plan", str(plan_path), "--print-json"]
     return {
+        "cli_check": [
+            sys.executable,
+            str(checker),
+            "--codex-bin",
+            codex_bin,
+            "--cwd",
+            str(repo),
+            "--print-json",
+        ],
         "dry_run": [*base_run, "--dry-run"],
         "run": base_run,
         "score": base_score,
@@ -51,7 +61,8 @@ def next_commands(plan_path: Path) -> dict[str, list[str]]:
 
 def next_actions() -> list[str]:
     return [
-        "Run dry_run first to verify the generated commands.",
+        "Run cli_check first to verify the configured Codex CLI can launch.",
+        "Run dry_run next to verify the generated commands.",
         "Run the full or focused eval command and wait for it to finish.",
         "Run score only after eval artifacts have been written; do not run eval and score in parallel.",
         "Use focused_run and focused_score with a real eval id when debugging one prompt.",
@@ -130,7 +141,7 @@ def main() -> int:
         "repo": str(repo),
         "artifact_dir": str(artifact_dir),
         "plan": str(plan_path),
-        "next_commands": next_commands(plan_path),
+        "next_commands": next_commands(plan_path, repo=repo, codex_bin=args.codex_bin),
         "next_actions": next_actions(),
         "prompt_count": len(plan),
         "artifacts_cleaned": not args.keep_artifacts,

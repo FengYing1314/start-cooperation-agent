@@ -120,8 +120,8 @@ python3 scripts/validate_start_work.py
 python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
 ```
 
-For trigger behavior forward-tests, load `references/trigger-eval-prompts.md`, prepare an isolated fixture, execute the generated plan with `scripts/run_trigger_eval_plan.py`, then score the artifacts.
+For trigger behavior forward-tests, load `references/trigger-eval-prompts.md`, prepare an isolated fixture, run `scripts/check_trigger_eval_cli.py` or the returned `cli_check`, execute the generated plan with `scripts/run_trigger_eval_plan.py`, then score the artifacts.
 
 `validate_start_work.py` compiles every local Python script, including `start_work_contract.py`, runs the smoke tests, and checks git whitespace/conflict markers when the skill is inside a git worktree.
 
-These checks cover stable team ids, team next-step hints, team readiness inspection, handoff route invariants, project status inspection, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, run next-step hints, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, trigger-eval prompt coverage, fixture preparation and artifact cleanup, trigger-eval step hints, dry-run planning, plan execution, runner failure artifacts, trace scoring, contract/documentation drift, progressive reference routing, and skill metadata validity.
+These checks cover stable team ids, team next-step hints, team readiness inspection, handoff route invariants, project status inspection, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, run next-step hints, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, trigger-eval prompt coverage, CLI launch checks, fixture preparation and artifact cleanup, trigger-eval step hints, dry-run planning, plan execution, runner failure artifacts, trace scoring, contract/documentation drift, progressive reference routing, and skill metadata validity.
