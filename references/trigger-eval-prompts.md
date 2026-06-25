@@ -1,6 +1,6 @@
 # Start Work Trigger Eval Prompts
 
-Use these prompts for forward-testing whether `start-work` triggers when it should and stays idle for adjacent work. Keep this list small; add real misses as they appear.
+Use these prompts for forward-testing whether `start-work` triggers when it should and stays idle for adjacent work. Generate a dry-run command plan with `scripts/plan_trigger_evals.py --print-json`. Keep this list small; add real misses as they appear.
 
 | ID | Should trigger | Focus | Prompt |
 | --- | --- | --- | --- |

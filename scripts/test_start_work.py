@@ -21,6 +21,7 @@ INSPECT_RUN = SCRIPT_DIR / "inspect_run.py"
 INSPECT_PROJECT = SCRIPT_DIR / "inspect_project.py"
 START_WORK_CONTRACT = SCRIPT_DIR / "start_work_contract.py"
 VALIDATE_START_WORK = SCRIPT_DIR / "validate_start_work.py"
+PLAN_TRIGGER_EVALS = SCRIPT_DIR / "plan_trigger_evals.py"
 SKILL_ROOT = SCRIPT_DIR.parent
 
 
@@ -755,7 +756,23 @@ def test_trigger_eval_prompts_are_balanced(root: Path) -> None:
     assert {"explicit", "implicit", "contextual", "tiny-task", "skill-authoring"} <= focuses, focuses
     assert any("$start-work" in row["prompt"] for row in rows if row["should_trigger"] == "true"), rows
     assert any("No multi-agent workflow needed" in row["prompt"] for row in rows if row["should_trigger"] == "false"), rows
+    assert "plan_trigger_evals.py --print-json" in text, text
     assert "Expected behavior:" in text, text
+
+
+def test_trigger_eval_plan_is_stable(root: Path) -> None:
+    assert PLAN_TRIGGER_EVALS.exists(), PLAN_TRIGGER_EVALS
+    prompt_rows = parse_markdown_table((SKILL_ROOT / "references" / "trigger-eval-prompts.md").read_text(encoding="utf-8"))
+    proc = script(PLAN_TRIGGER_EVALS, "--artifact-dir", str(root / "evals"), "--print-json")
+    plan = json.loads(proc.stdout)
+    assert len(plan) == len(prompt_rows), plan
+    assert {item["should_trigger"] for item in plan} == {True, False}, plan
+    first = plan[0]
+    assert first["id"] == "trig-01", first
+    assert first["command"][:3] == ["codex", "exec", "--json"], first
+    assert first["artifact"].endswith("trig-01-explicit.jsonl"), first
+    assert "$start-work" in first["prompt"], first
+    assert ">" in first["shell"], first
 
 
 def test_shared_contract_matches_generated_routes(root: Path) -> None:
@@ -852,6 +869,7 @@ def main() -> int:
         test_fallback_mode_requires_reason,
         test_reference_routing_is_progressive,
         test_trigger_eval_prompts_are_balanced,
+        test_trigger_eval_plan_is_stable,
         test_shared_contract_matches_generated_routes,
         test_protocol_status_docs_match_contract,
     ]
