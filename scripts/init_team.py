@@ -285,6 +285,11 @@ Default handoff route:
 Role rules:
 {role_rules}
 
+Handoff payload contract:
+- Every handoff you send or return must include local message id, run id, team id, From, To, status, summary, checks or evidence, and requested next action.
+- If a direct message is sent, set `Next handoff sent:` to `yes` and name the target thread.
+- If a direct message is not sent, set `Next handoff sent:` to `no` and include the exact unsent payload and target.
+
 Global rules:
 - Read project instructions before changing or reviewing files.
 - Do not revert unrelated changes.

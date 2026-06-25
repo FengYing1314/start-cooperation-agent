@@ -161,6 +161,11 @@ def test_team_inspection_requires_acknowledgements(root: Path) -> None:
     assert team_commands["ack_reviewer"][-3:] == ["--role", "R1", "--print-json"], team_commands
     assert team_commands["init_run"][1].endswith("init_run.py"), team_commands
     assert any("standing-developer.md" in item for item in team_result["next_actions"]), team_result
+    for name in ("standing-developer.md", "standing-reviewer.md"):
+        standing_text = (repo / ".agent-work" / "start-work" / "team" / name).read_text(encoding="utf-8")
+        assert "Handoff payload contract:" in standing_text, standing_text
+        assert "Every handoff you send or return must include local message id" in standing_text, standing_text
+        assert "Next handoff sent:" in standing_text, standing_text
     proc = inspect_team(repo, check=False)
     combined = proc.stdout + proc.stderr
     assert proc.returncode != 0, combined
