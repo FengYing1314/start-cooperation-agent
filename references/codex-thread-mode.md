@@ -6,6 +6,7 @@ Use Codex thread mode when the project should keep an independent, reusable Mana
 
 - Tool discovery
 - Non-destructive preflight
+- Live drill gate
 - Project selection
 - Team initialization
 - Roster rules
@@ -64,6 +65,22 @@ Forbidden in preflight:
 - do not call `read_thread` unless this is recovery, audit on user request, or verification of an exact known thread.
 
 End preflight with a readiness summary: project match, available thread tools, known or missing Manager/Developer/Reviewer targets, ledger readiness, pending outbound sends, and the next safe command.
+
+## Live Drill Gate
+
+Use `scripts/plan_codex_thread_drill.py --repo <repo-root> --print-json` when asked to prove the Codex App role-to-role loop but the user has not explicitly approved live thread creation or message sends.
+
+The plan is intentionally non-destructive. It may include `tool_search`, `list_projects`, exact `list_threads`, `inspect_project.py`, and `inspect_team.py` as safe preflight steps. It must list `create_thread`, `send_message_to_thread`, and normal `read_thread` usage under `blocked_without_approval` until there is an explicit live-drill or team-initialization request.
+
+Treat `ready_for_live_drill=true` as readiness only, not consent. After approval, the drill should prove:
+
+1. Manager sends an exact prepared work-order payload to D1.
+2. D1 sends `developer_completion` directly to Manager.
+3. Manager checks the integrated diff and sends an exact review request to R1.
+4. R1 sends `reviewer_accepted` to Manager, or sends `reviewer_fix` directly to D1 with a separate Manager copy.
+5. Manager records received payloads from direct messages and does not use Manager polling as the normal transport.
+
+If the plan reports pending outbound sends or an unsent reviewer fix, resolve those first. A live drill must not create duplicate handoffs while the ledger already has an unfinished send.
 
 ## Project Selection
 

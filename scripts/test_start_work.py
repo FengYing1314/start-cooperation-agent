@@ -23,6 +23,7 @@ RECORD_INBOUND_HANDOFF = SCRIPT_DIR / "record_inbound_handoff.py"
 INSPECT_TEAM = SCRIPT_DIR / "inspect_team.py"
 INSPECT_RUN = SCRIPT_DIR / "inspect_run.py"
 INSPECT_PROJECT = SCRIPT_DIR / "inspect_project.py"
+PLAN_CODEX_THREAD_DRILL = SCRIPT_DIR / "plan_codex_thread_drill.py"
 START_WORK_CONTRACT = SCRIPT_DIR / "start_work_contract.py"
 VALIDATE_START_WORK = SCRIPT_DIR / "validate_start_work.py"
 VALIDATE_HANDOFF = SCRIPT_DIR / "validate_handoff.py"
@@ -115,6 +116,10 @@ def inspect_team(repo: Path, *, check: bool = True) -> subprocess.CompletedProce
 
 def inspect_project(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return script(INSPECT_PROJECT, "--repo", str(repo), *args, "--print-json", check=check)
+
+
+def plan_codex_thread_drill(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return script(PLAN_CODEX_THREAD_DRILL, "--repo", str(repo), *args, "--print-json", check=check)
 
 
 def test_team_id_is_stable(root: Path) -> None:
@@ -234,6 +239,49 @@ def test_project_inspection_guides_preflight_without_team(root: Path) -> None:
     assert any("non-destructive Codex App preflight" in item for item in summary["next_actions"]), summary
     assert any("before creating threads or sending messages" in item for item in summary["next_actions"]), summary
     assert any(problem["scope"] == "team" for problem in summary["problems"]), summary
+
+
+def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> None:
+    repo = make_repo(root, "thread-drill-plan")
+    unready = json.loads(plan_codex_thread_drill(repo).stdout)
+    assert unready["ok"] is True, unready
+    assert unready["ready_for_live_drill"] is False, unready
+    assert unready["requires_explicit_live_drill_approval"] is True, unready
+    assert unready["can_run_non_destructive_preflight_now"] is True, unready
+    assert any(step.get("tool") == "list_projects" for step in unready["non_destructive_preflight"]), unready
+    assert any(step.get("tool") == "list_threads" for step in unready["non_destructive_preflight"]), unready
+    blocked_tools = {item.get("tool") for item in unready["blocked_without_approval"]}
+    assert {"create_thread", "send_message_to_thread", "read_thread"} <= blocked_tools, unready
+    assert any("explicit approval" in item for item in unready["recommended_next_actions"]), unready
+
+    init_team(
+        repo,
+        "--manager-thread-id",
+        "manager-thread",
+        "--developer-thread-id",
+        "dev-thread",
+        "--reviewer-thread-id",
+        "review-thread",
+    )
+    ack(repo, "D1")
+    ack(repo, "R1")
+    ready = json.loads(plan_codex_thread_drill(repo).stdout)
+    assert ready["ready_for_live_drill"] is True, ready
+    state = ready["current_state"]
+    assert state["codex_thread_ready"] is True, ready
+    assert state["pending_outbound_count"] == 0, ready
+    assert state["reviewer_fix_needs_send_count"] == 0, ready
+    assert state["target_presence"]["M"]["thread_id_present"] is True, ready
+    drill_text = json.dumps(ready["live_drill_when_approved"], ensure_ascii=False)
+    assert "init_team.py" in drill_text, drill_text
+    assert "send_message_to_thread" in drill_text, drill_text
+    assert "developer_completion" in drill_text, drill_text
+    assert "reviewer_accepted" in drill_text, drill_text
+    assert "reviewer_fix directly to D1" in drill_text, drill_text
+    assert any("without Manager polling" in item for item in ready["recommended_next_actions"]), ready
+
+    text_result = script(PLAN_CODEX_THREAD_DRILL, "--repo", str(repo))
+    assert "Requires Explicit Live Drill Approval: true" in text_result.stdout, text_result.stdout
 
 
 def test_project_inspection_summarizes_team_and_recent_runs(root: Path) -> None:
@@ -738,6 +786,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "inspect_team.py" in skill, skill
     assert "inspect_run.py" in skill, skill
     assert "inspect_project.py" in skill, skill
+    assert "plan_codex_thread_drill.py" in skill, skill
     assert "prepare_outbound_handoff.py" in skill, skill
     assert "finalize_outbound_handoff.py" in skill, skill
     assert "record_inbound_handoff.py" in skill, skill
@@ -766,6 +815,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "run `unsent_handoff.after_send_status_commands` only after the real send succeeds" in skill, skill
     assert "run `unsent_handoff.after_send_failed_command` with a concrete send error" in skill, skill
     assert "reviewer fix send-state project resume" in skill, skill
+    assert "Codex App live-drill planning" in skill, skill
 
     template_index = (SKILL_ROOT / "references" / "templates.md").read_text(encoding="utf-8")
     assert "This file is an index" in template_index, template_index
@@ -796,6 +846,10 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "--send-evidence" in codex_thread, codex_thread
     assert "pending_outbound" in codex_thread, codex_thread
     assert "## Non-Destructive Preflight" in codex_thread, codex_thread
+    assert "## Live Drill Gate" in codex_thread, codex_thread
+    assert "plan_codex_thread_drill.py" in codex_thread, codex_thread
+    assert "blocked_without_approval" in codex_thread, codex_thread
+    assert "ready_for_live_drill=true" in codex_thread, codex_thread
     assert "Allowed preflight actions" in codex_thread, codex_thread
     assert "Forbidden in preflight" in codex_thread, codex_thread
     assert "do not call `create_thread`" in codex_thread, codex_thread
@@ -2566,6 +2620,7 @@ def main() -> int:
         test_team_inspection_requires_acknowledgements,
         test_team_inspection_rejects_broken_handoff_route,
         test_project_inspection_guides_preflight_without_team,
+        test_codex_thread_drill_plan_preserves_live_approval_gate,
         test_project_inspection_summarizes_team_and_recent_runs,
         test_callback_only_rejected_for_direct_thread_mode,
         test_direct_thread_happy_path,
