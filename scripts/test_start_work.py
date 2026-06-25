@@ -63,6 +63,18 @@ def import_drill_module():
     return plan_codex_thread_drill
 
 
+def import_validate_module():
+    sys.path.insert(0, str(SCRIPT_DIR))
+    try:
+        import validate_start_work
+    finally:
+        try:
+            sys.path.remove(str(SCRIPT_DIR))
+        except ValueError:
+            pass
+    return validate_start_work
+
+
 def run(
     command: list[str],
     *,
@@ -197,6 +209,32 @@ def test_team_id_is_stable(root: Path) -> None:
     )
     assert result["team_id"] == "custom-team", result
     assert result["updated"] is False, result
+
+
+def test_run_helper_reports_timeout(root: Path) -> None:
+    del root
+    command = [sys.executable, "-c", "import time; time.sleep(0.2)"]
+    try:
+        run(command, timeout=0.01, check=False)
+    except AssertionError as exc:
+        assert "timed out after 0.01s" in str(exc), str(exc)
+    else:
+        raise AssertionError(f"Expected timeout for: {' '.join(command)}")
+
+
+def test_validate_run_step_reports_timeout(root: Path) -> None:
+    del root
+    validate = import_validate_module()
+    try:
+        validate.run_step(
+            "timeout check",
+            [sys.executable, "-c", "import time; time.sleep(0.2)"],
+            command_timeout_seconds=0.01,
+        )
+    except SystemExit as exc:
+        assert exc.code == 1, exc.code
+    else:
+        raise AssertionError("Expected run_step timeout path to exit with code 1")
 
 
 def test_team_inspection_requires_acknowledgements(root: Path) -> None:
@@ -2793,6 +2831,8 @@ def test_protocol_status_docs_match_contract(root: Path) -> None:
 
 FAST_TESTS = [
     test_team_id_is_stable,
+    test_run_helper_reports_timeout,
+    test_validate_run_step_reports_timeout,
     test_team_inspection_requires_acknowledgements,
     test_codex_thread_drill_plan_preserves_live_approval_gate,
     test_project_inspection_guides_preflight_without_team,
@@ -2803,6 +2843,8 @@ FAST_TESTS = [
 
 ULTRA_FAST_TESTS = [
     test_team_id_is_stable,
+    test_run_helper_reports_timeout,
+    test_validate_run_step_reports_timeout,
     test_team_inspection_requires_acknowledgements,
     test_project_inspection_guides_preflight_without_team,
     test_codex_thread_drill_plan_preserves_live_approval_gate,
@@ -2813,6 +2855,8 @@ ULTRA_FAST_TESTS = [
 
 QUICK_TESTS = [
     test_team_id_is_stable,
+    test_run_helper_reports_timeout,
+    test_validate_run_step_reports_timeout,
     test_team_inspection_requires_acknowledgements,
     test_team_inspection_rejects_broken_handoff_route,
     test_project_inspection_guides_preflight_without_team,
@@ -2833,6 +2877,8 @@ QUICK_TESTS = [
 
 ALL_TESTS = [
     test_team_id_is_stable,
+    test_run_helper_reports_timeout,
+    test_validate_run_step_reports_timeout,
     test_team_inspection_requires_acknowledgements,
     test_team_inspection_rejects_broken_handoff_route,
     test_project_inspection_guides_preflight_without_team,
