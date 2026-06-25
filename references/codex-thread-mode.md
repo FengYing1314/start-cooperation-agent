@@ -36,6 +36,8 @@ If no tool exposes the current Manager thread id, do not infer or guess it. Use 
 
 If the tools remain unavailable, tell the user and ask before falling back to subagents.
 
+Codex CLI is not a substitute for Codex App thread transport unless a future CLI command explicitly exposes the same thread messaging operation. Use CLI for trigger evals, local validation, or launching the app; do not use `codex exec`/`resume` as proof that a role-to-role Codex App thread message was sent.
+
 ## Non-Destructive Preflight
 
 Use this path when the user asks to audit state, check readiness, review the call chain, or decide whether Codex App thread mode is possible. Preflight must not create threads, send messages, or inspect another role's conversation history as a substitute for direct handoffs.

@@ -769,6 +769,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "list_projects" in codex_thread, codex_thread
     assert "list_threads" in codex_thread, codex_thread
     assert "readiness summary" in codex_thread, codex_thread
+    assert "Codex CLI is not a substitute for Codex App thread transport" in codex_thread, codex_thread
+    assert "do not use `codex exec`/`resume` as proof" in codex_thread, codex_thread
     assert "record_inbound_handoff.py --kind reviewer_fix" in codex_thread, codex_thread
     assert "transport layer" in codex_thread, codex_thread
     assert "scripts/append_event.py --kind message --actor M" not in codex_thread, codex_thread
