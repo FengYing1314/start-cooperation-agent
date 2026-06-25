@@ -82,9 +82,11 @@ Each task gets a run ledger:
 
 Use `scripts/init_run.py` to create a run. In `codex-thread` mode it must read `team/team.json`; if the team is missing, incomplete, unacknowledged, or lacks `M.thread_id` for direct mode, it must fail with a clear instruction to initialize or acknowledge the team first.
 
-The JSON result includes `next_commands` and `next_actions`; use them to inspect the run, record the work-order payload, and only advance to a direct-send running status after a real thread message succeeds.
+The JSON result includes `next_commands` and `next_actions`; use them to inspect the run, prepare the work-order payload, and only advance to a direct-send running status after a real thread message succeeds.
 
-Use `scripts/validate_handoff.py --kind <handoff-kind> --body-file <payload.md> --print-json` before sending generated work orders, review requests, fix requests, completions, or acceptance payloads when practical. It checks required labels, role direction, allowed status values, unresolved placeholders, and returns LLM-readable `next_actions`.
+Use `scripts/prepare_outbound_handoff.py --run-dir <run-dir> --kind <outbound-kind> --body-file <payload.md> --print-json` before sending outbound work orders, review requests, or reviewer fix handoffs. It validates the exact payload, records it in the ledger, resolves the roster target thread id, and returns LLM-readable `next_actions` plus a post-send status command.
+
+Use `scripts/validate_handoff.py --kind <handoff-kind> --body-file <payload.md> --print-json` for received or manually relayed work orders, review requests, fix requests, completions, or acceptance payloads when practical. It checks required labels, role direction, allowed status values, unresolved placeholders, and returns LLM-readable `next_actions`.
 
 `run.json` is the machine-readable run index. It must include `current_status`, status update metadata, last event metadata, mode, team roster snapshot, and paths to the ledger files so a later agent can resume without parsing prose first.
 
@@ -180,11 +182,10 @@ Direct send sequence:
 
 ```text
 1. Compose the handoff payload from the matching template.
-2. Validate the exact payload with validate_handoff.py when practical.
-3. Record the outbound payload with append_event.py, or record the received handoff as soon as it arrives.
-4. Send the same payload to the roster target with send_message_to_thread.
-5. If sending succeeds, append the next running status: `developer_running`, `reviewer_running`, or `developer_fix_running`.
-6. If sending fails, record a blocker event with the unsent target and payload location and do not advance the run status.
+2. Run prepare_outbound_handoff.py for outbound handoffs, or validate_handoff.py for received/manual-relay payloads.
+3. Send the prepared payload file to the returned roster target with send_message_to_thread.
+4. If sending succeeds, run the returned post-send status command to append `developer_running`, `reviewer_running`, or `developer_fix_running`.
+5. If sending fails, record a blocker event with the unsent target and payload location and do not advance the run status.
 ```
 
 ## Message Ids

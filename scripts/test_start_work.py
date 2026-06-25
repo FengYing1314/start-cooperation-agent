@@ -16,6 +16,7 @@ INIT_TEAM = SCRIPT_DIR / "init_team.py"
 ACK_TEAM = SCRIPT_DIR / "ack_team.py"
 INIT_RUN = SCRIPT_DIR / "init_run.py"
 APPEND_EVENT = SCRIPT_DIR / "append_event.py"
+PREPARE_OUTBOUND_HANDOFF = SCRIPT_DIR / "prepare_outbound_handoff.py"
 INSPECT_TEAM = SCRIPT_DIR / "inspect_team.py"
 INSPECT_RUN = SCRIPT_DIR / "inspect_run.py"
 INSPECT_PROJECT = SCRIPT_DIR / "inspect_project.py"
@@ -353,6 +354,8 @@ def test_direct_thread_happy_path(root: Path) -> None:
     run_commands = run_data["next_commands"]
     assert run_commands["inspect_run"][1].endswith("inspect_run.py"), run_commands
     assert run_commands["inspect_run"][run_commands["inspect_run"].index("--run-dir") + 1] == str(run_dir), run_commands
+    assert run_commands["prepare_work_order"][1].endswith("prepare_outbound_handoff.py"), run_commands
+    assert "work_order" in run_commands["prepare_work_order"], run_commands
     assert run_commands["record_work_order"][1].endswith("append_event.py"), run_commands
     assert "manager_work_order" in run_commands["record_work_order"], run_commands
     assert "dev-thread" in run_commands["record_developer_running"], run_commands
@@ -710,6 +713,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "inspect_team.py" in skill, skill
     assert "inspect_run.py" in skill, skill
     assert "inspect_project.py" in skill, skill
+    assert "prepare_outbound_handoff.py" in skill, skill
     assert "validate_handoff.py" in skill, skill
     assert "reviewer_accepted" in skill, skill
     assert "check_trigger_eval_cli.py" in skill, skill
@@ -755,6 +759,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
 
     protocol = (SKILL_ROOT / "references" / "protocol.md").read_text(encoding="utf-8")
     assert "scripts/start_work_contract.py" in protocol, protocol
+    assert "prepare_outbound_handoff.py" in protocol, protocol
     assert "validate_handoff.py" in protocol, protocol
     assert "## Mode-Specific Transport" in protocol, protocol
     assert "Direct codex-thread route" in protocol, protocol
@@ -776,6 +781,10 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "roster-routed" in openai_yaml, openai_yaml
     assert "callback/manual relay fallback" in openai_yaml, openai_yaml
     assert "direct-message development team" not in openai_yaml, openai_yaml
+
+    codex_thread = (SKILL_ROOT / "references" / "codex-thread-mode.md").read_text(encoding="utf-8")
+    assert "do not infer or guess" in codex_thread, codex_thread
+    assert "do not create a direct `codex-thread` run from a callback-only roster" in codex_thread, codex_thread
 
 
 def test_handoff_payload_validation(root: Path) -> None:
@@ -869,9 +878,152 @@ Status: complete | blocked
     assert any("Unexpected To" in problem for problem in bad["problems"]), bad
     assert any("Required label is empty: Ownership" in problem for problem in bad["problems"]), bad
 
-    codex_thread = (SKILL_ROOT / "references" / "codex-thread-mode.md").read_text(encoding="utf-8")
-    assert "do not infer or guess" in codex_thread, codex_thread
-    assert "do not create a direct `codex-thread` run from a callback-only roster" in codex_thread, codex_thread
+
+def test_prepare_outbound_handoff_records_and_routes(root: Path) -> None:
+    assert PREPARE_OUTBOUND_HANDOFF.exists(), PREPARE_OUTBOUND_HANDOFF
+    repo = make_repo(root, "prepare-outbound")
+    init_team(
+        repo,
+        "--manager-thread-id",
+        "manager-thread",
+        "--developer-thread-id",
+        "dev-thread",
+        "--reviewer-thread-id",
+        "review-thread",
+    )
+    ack(repo, "D1")
+    ack(repo, "R1")
+    run_data = json.loads(
+        script(
+            INIT_RUN,
+            "--repo",
+            str(repo),
+            "--slug",
+            "prepare",
+            "--request",
+            "test prepare outbound handoff",
+            "--print-json",
+        ).stdout
+    )
+    run_dir = Path(str(run_data["run_dir"]))
+    payload = root / "work-order.md"
+    payload.write_text(
+        """Start-work work order M-001
+Run ID: 20260101-000001-prepare
+Team ID: team-prepare
+From: M
+To: D1
+Manager Thread: manager-thread
+Developer Thread: dev-thread
+Reviewer Thread: review-thread
+Project Path: C:/repo
+
+User goal:
+Fix the parser error.
+
+Ownership:
+src/parser.py
+
+Acceptance criteria:
+Parser handles blank input.
+
+Required checks:
+python -m pytest tests/test_parser.py
+
+Developer response format:
+Status: complete | blocked
+Changed files:
+Implementation summary:
+Checks run:
+Next handoff sent:
+""",
+        encoding="utf-8",
+    )
+
+    prepared = json.loads(
+        script(
+            PREPARE_OUTBOUND_HANDOFF,
+            "--run-dir",
+            str(run_dir),
+            "--kind",
+            "work_order",
+            "--body-file",
+            str(payload),
+            "--print-json",
+        ).stdout
+    )
+    assert prepared["ok"] is True, prepared
+    assert prepared["send_to"] == "D1", prepared
+    assert prepared["send_to_thread_id"] == "dev-thread", prepared
+    assert prepared["event"]["id"] == "M-001", prepared
+    assert prepared["event"]["run_status"] == "manager_work_order", prepared
+    assert prepared["event"]["file"].replace("\\", "/") == "messages/M-001-work-order-ready.md", prepared
+    assert Path(prepared["payload_file"]).exists(), prepared
+    assert "developer_running" in prepared["post_send_status_command"], prepared
+    assert any("send_message_to_thread" in item for item in prepared["next_actions"]), prepared
+    inspected = json.loads(inspect_run(run_dir).stdout)
+    assert inspected["current_status"] == "manager_work_order", inspected
+    assert inspected["event_count"] == 1, inspected
+
+    bad_run = json.loads(
+        script(
+            INIT_RUN,
+            "--repo",
+            str(repo),
+            "--slug",
+            "prepare-bad",
+            "--request",
+            "test bad prepare outbound handoff",
+            "--print-json",
+        ).stdout
+    )
+    bad_run_dir = Path(str(bad_run["run_dir"]))
+    bad_payload = root / "bad-outbound.md"
+    bad_payload.write_text(
+        """Start-work work order M-001
+Run ID: <run-id>
+Team ID: team-prepare
+From: M
+To: D1
+Manager Thread: manager-thread
+Developer Thread: dev-thread
+Reviewer Thread: review-thread
+Project Path: C:/repo
+
+User goal:
+Fix the parser error.
+
+Ownership:
+src/parser.py
+
+Acceptance criteria:
+Parser handles blank input.
+
+Required checks:
+python -m pytest tests/test_parser.py
+
+Developer response format:
+Status: complete | blocked
+""",
+        encoding="utf-8",
+    )
+    failed = script(
+        PREPARE_OUTBOUND_HANDOFF,
+        "--run-dir",
+        str(bad_run_dir),
+        "--kind",
+        "work_order",
+        "--body-file",
+        str(bad_payload),
+        "--print-json",
+        check=False,
+    )
+    assert failed.returncode != 0, failed.stdout
+    failed_summary = json.loads(failed.stdout)
+    assert failed_summary["ok"] is False, failed_summary
+    assert any("Unresolved placeholder" in problem for problem in failed_summary["problems"]), failed_summary
+    bad_inspected = json.loads(inspect_run(bad_run_dir).stdout)
+    assert bad_inspected["event_count"] == 0, bad_inspected
 
 
 def parse_markdown_table(text: str) -> list[dict[str, str]]:
@@ -1401,6 +1553,7 @@ def main() -> int:
         test_fallback_mode_requires_reason,
         test_reference_routing_is_progressive,
         test_handoff_payload_validation,
+        test_prepare_outbound_handoff_records_and_routes,
         test_trigger_eval_prompts_are_balanced,
         test_trigger_eval_cli_check_reports_launchability,
         test_trigger_eval_plan_is_stable,

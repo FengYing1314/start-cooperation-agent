@@ -395,6 +395,17 @@ def next_commands(run_dir: Path, team: dict[str, object], mode: str) -> dict[str
             "<work-order-payload.md>",
             "--print-json",
         ],
+        "prepare_work_order": [
+            sys.executable,
+            str(SCRIPT_DIR / "prepare_outbound_handoff.py"),
+            "--run-dir",
+            str(run_dir),
+            "--kind",
+            "work_order",
+            "--body-file",
+            "<work-order-payload.md>",
+            "--print-json",
+        ],
     }
     if mode == "codex-thread":
         commands["record_developer_running"] = [
@@ -423,7 +434,7 @@ def next_actions(mode: str) -> list[str]:
     actions = [
         "Run inspect_run before resuming or appending events.",
         "Write the Manager work order from references/templates-work-order.md.",
-        "Record the outbound work order with record_work_order.",
+        "Prepare, validate, and record the outbound work order with prepare_work_order.",
     ]
     if mode == "codex-thread":
         actions.extend(

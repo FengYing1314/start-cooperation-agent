@@ -1,6 +1,6 @@
 # Start Work Work-Order Templates
 
-Use these for Manager-to-Developer work orders and Developer-to-Manager completion handoffs. These payloads assume direct `codex-thread` mode unless a section says otherwise. Validate filled payloads with `scripts/validate_handoff.py` before sending when practical.
+Use these for Manager-to-Developer work orders and Developer-to-Manager completion handoffs. These payloads assume direct `codex-thread` mode unless a section says otherwise. Prepare outbound work orders with `scripts/prepare_outbound_handoff.py`; validate received or manual-relay payloads with `scripts/validate_handoff.py` when practical.
 
 ## Contents
 
