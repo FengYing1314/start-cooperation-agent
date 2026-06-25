@@ -24,6 +24,7 @@ VALIDATE_START_WORK = SCRIPT_DIR / "validate_start_work.py"
 PLAN_TRIGGER_EVALS = SCRIPT_DIR / "plan_trigger_evals.py"
 SCORE_TRIGGER_EVALS = SCRIPT_DIR / "score_trigger_evals.py"
 PREPARE_TRIGGER_EVAL_WORKSPACE = SCRIPT_DIR / "prepare_trigger_eval_workspace.py"
+RUN_TRIGGER_EVAL_PLAN = SCRIPT_DIR / "run_trigger_eval_plan.py"
 SKILL_ROOT = SCRIPT_DIR.parent
 
 
@@ -679,6 +680,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "inspect_team.py" in skill, skill
     assert "inspect_run.py" in skill, skill
     assert "inspect_project.py" in skill, skill
+    assert "run_trigger_eval_plan.py" in skill, skill
     assert "start_work_contract.py" in skill, skill
     assert "validate_start_work.py" in skill, skill
     assert "quick_validate.py" in skill, skill
@@ -765,6 +767,7 @@ def test_trigger_eval_prompts_are_balanced(root: Path) -> None:
     assert any("$start-work" in row["prompt"] for row in rows if row["should_trigger"] == "true"), rows
     assert any("No multi-agent workflow needed" in row["prompt"] for row in rows if row["should_trigger"] == "false"), rows
     assert "prepare_trigger_eval_workspace.py --output-dir" in text, text
+    assert "run_trigger_eval_plan.py --plan" in text, text
     assert "plan_trigger_evals.py --print-json" in text, text
     assert "score_trigger_evals.py --print-json" in text, text
     assert "Expected behavior:" in text, text
@@ -805,6 +808,48 @@ def test_prepare_trigger_eval_workspace(root: Path) -> None:
     assert result["prompt_count"] == len(plan), result
     assert all(Path(item["artifact"]).parent == Path(result["artifact_dir"]) for item in plan), plan
     assert all(item["cwd"] == str(repo) for item in plan), plan
+
+
+def test_trigger_eval_runner_respects_cwd_and_artifact(root: Path) -> None:
+    assert RUN_TRIGGER_EVAL_PLAN.exists(), RUN_TRIGGER_EVAL_PLAN
+    repo = root / "runner-repo"
+    repo.mkdir()
+    artifact = root / "artifacts" / "runner-01.jsonl"
+    plan_path = root / "runner-plan.json"
+    code = (
+        "import json, os; "
+        "print(json.dumps({'cwd': os.getcwd(), 'observed_trigger': False}))"
+    )
+    plan_path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "runner-01",
+                    "should_trigger": False,
+                    "focus": "runner",
+                    "prompt": "fake prompt",
+                    "artifact": str(artifact),
+                    "cwd": str(repo),
+                    "command": [sys.executable, "-c", code],
+                }
+            ],
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    dry = json.loads(script(RUN_TRIGGER_EVAL_PLAN, "--plan", str(plan_path), "--dry-run", "--print-json").stdout)
+    assert dry["ok"] is True, dry
+    assert dry["results"][0]["cwd"] == str(repo.resolve()), dry
+    assert not artifact.exists(), artifact
+
+    ran = json.loads(script(RUN_TRIGGER_EVAL_PLAN, "--plan", str(plan_path), "--print-json").stdout)
+    assert ran["ok"] is True, ran
+    event = json.loads(artifact.read_text(encoding="utf-8"))
+    assert event["cwd"] == str(repo.resolve()), event
+    assert event["observed_trigger"] is False, event
 
 
 def test_trigger_eval_score_reads_jsonl_artifacts(root: Path) -> None:
@@ -929,6 +974,7 @@ def main() -> int:
         test_trigger_eval_prompts_are_balanced,
         test_trigger_eval_plan_is_stable,
         test_prepare_trigger_eval_workspace,
+        test_trigger_eval_runner_respects_cwd_and_artifact,
         test_trigger_eval_score_reads_jsonl_artifacts,
         test_shared_contract_matches_generated_routes,
         test_protocol_status_docs_match_contract,

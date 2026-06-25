@@ -1,6 +1,6 @@
 # Start Work Trigger Eval Prompts
 
-Use these prompts for forward-testing whether `start-work` triggers when it should and stays idle for adjacent work. Prepare an isolated fixture with `scripts/prepare_trigger_eval_workspace.py --output-dir <tmp-dir> --print-json`, generate a dry-run command plan with `scripts/plan_trigger_evals.py --print-json`, run each item from its generated `cwd`, and score captured JSONL traces with `scripts/score_trigger_evals.py --print-json`. Keep this list small; add real misses as they appear.
+Use these prompts for forward-testing whether `start-work` triggers when it should and stays idle for adjacent work. Prepare an isolated fixture with `scripts/prepare_trigger_eval_workspace.py --output-dir <tmp-dir> --print-json`, generate a dry-run command plan with `scripts/plan_trigger_evals.py --print-json`, run it with `scripts/run_trigger_eval_plan.py --plan <tmp-dir>/trigger-eval-plan.json --print-json`, and score captured JSONL traces with `scripts/score_trigger_evals.py --print-json`. Keep this list small; add real misses as they appear.
 
 | ID | Should trigger | Focus | Prompt |
 | --- | --- | --- | --- |
