@@ -789,8 +789,11 @@ def test_trigger_eval_prompts_are_balanced(root: Path) -> None:
     assert any("No multi-agent workflow needed" in row["prompt"] for row in rows if row["should_trigger"] == "false"), rows
     assert "prepare_trigger_eval_workspace.py --output-dir" in text, text
     assert "next_commands" in text, text
+    assert "next_actions" in text, text
+    assert "do not run eval and score in parallel" in text, text
     assert "run_trigger_eval_plan.py --plan" in text, text
     assert "score_trigger_evals.py --plan" in text, text
+    assert "Empty artifacts, runner errors, and timeouts are inconclusive failures" in text, text
     assert "Expected behavior:" in text, text
 
 
@@ -835,6 +838,7 @@ def test_prepare_trigger_eval_workspace(root: Path) -> None:
     assert commands["score"][commands["score"].index("--plan") + 1] == str(plan_path), commands
     assert commands["focused_run"][-2:] == ["--id", "<eval-id>"], commands
     assert commands["focused_score"][-2:] == ["--id", "<eval-id>"], commands
+    assert any("do not run eval and score in parallel" in item for item in result["next_actions"]), result
     assert result["artifacts_cleaned"] is True, result
 
     stale = Path(result["artifact_dir"]) / "stale.jsonl"
@@ -951,6 +955,39 @@ def test_trigger_eval_runner_respects_cwd_and_artifact(root: Path) -> None:
     assert timed_out_summary["ok"] is False, timed_out_summary
     assert timed_out_summary["results"][0]["timeout"] is True, timed_out_summary
     assert timed_out_summary["results"][0]["returncode"] is None, timed_out_summary
+    timeout_event = json.loads(timeout_artifact.read_text(encoding="utf-8").splitlines()[-1])
+    assert timeout_event["eval_error"] == "timeout", timeout_event
+
+    launch_artifact = root / "artifacts" / "launch-failed.jsonl"
+    launch_plan_path = root / "launch-failed-plan.json"
+    launch_plan_path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "launch-failed-01",
+                    "artifact": str(launch_artifact),
+                    "cwd": str(repo),
+                    "command": ["definitely-missing-start-work-eval-command"],
+                }
+            ],
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    launch_failed = script(
+        RUN_TRIGGER_EVAL_PLAN,
+        "--plan",
+        str(launch_plan_path),
+        "--print-json",
+        check=False,
+    )
+    assert launch_failed.returncode != 0, launch_failed.stdout
+    launch_summary = json.loads(launch_failed.stdout)
+    assert launch_summary["results"][0]["ok"] is False, launch_summary
+    launch_event = json.loads(launch_artifact.read_text(encoding="utf-8").splitlines()[-1])
+    assert launch_event["eval_error"] == "launch_failed", launch_event
 
 
 def test_trigger_eval_score_reads_jsonl_artifacts(root: Path) -> None:
@@ -1040,6 +1077,46 @@ def test_trigger_eval_score_reads_jsonl_artifacts(root: Path) -> None:
     assert relative["ok"] is True, relative
     assert relative["results"][0]["expected_trigger"] is False, relative
     assert relative["results"][0]["artifact"] == str(relative_artifact.resolve()), relative
+
+    empty_artifact = relative_dir / "artifacts" / "empty.jsonl"
+    empty_artifact.write_text("", encoding="utf-8")
+    error_artifact = relative_dir / "artifacts" / "error.jsonl"
+    error_artifact.write_text(json.dumps({"eval_error": "launch_failed"}) + "\n", encoding="utf-8")
+    integrity_plan_path = relative_dir / "integrity-plan.json"
+    integrity_plan_path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "empty-false",
+                    "should_trigger": "false",
+                    "focus": "integrity",
+                    "artifact": "artifacts/empty.jsonl",
+                },
+                {
+                    "id": "error-false",
+                    "should_trigger": "false",
+                    "focus": "integrity",
+                    "artifact": "artifacts/error.jsonl",
+                },
+            ],
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    integrity = script(
+        SCORE_TRIGGER_EVALS,
+        "--plan",
+        str(integrity_plan_path),
+        "--print-json",
+        check=False,
+    )
+    assert integrity.returncode != 0, integrity.stdout
+    integrity_summary = json.loads(integrity.stdout)
+    assert integrity_summary["failed"] == 2, integrity_summary
+    methods = {item["method"] for item in integrity_summary["results"]}
+    assert {"empty", "error"} == methods, integrity_summary
 
 
 def test_shared_contract_matches_generated_routes(root: Path) -> None:

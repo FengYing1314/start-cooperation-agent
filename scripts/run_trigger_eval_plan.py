@@ -32,6 +32,12 @@ def command_parts(value: Any) -> list[str]:
     return value
 
 
+def append_jsonl(path: Path, event: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+
 def run_item(
     item: dict[str, Any],
     *,
@@ -79,10 +85,41 @@ def run_item(
             result["timeout"] = True
             if exc.stderr:
                 result["stderr_tail"] = stderr_tail(str(exc.stderr))
+            append_jsonl(
+                artifact,
+                {
+                    "eval_error": "timeout",
+                    "id": item_id,
+                    "timeout_seconds": timeout_seconds,
+                    "stderr_tail": result.get("stderr_tail", ""),
+                },
+            )
+            return result
+        except OSError as exc:
+            result["returncode"] = None
+            result["error"] = str(exc)
+            append_jsonl(
+                artifact,
+                {
+                    "eval_error": "launch_failed",
+                    "id": item_id,
+                    "error": str(exc),
+                },
+            )
             return result
     result["returncode"] = proc.returncode
     if proc.stderr:
         result["stderr_tail"] = stderr_tail(proc.stderr)
+    if proc.returncode != 0:
+        append_jsonl(
+            artifact,
+            {
+                "eval_error": "command_failed",
+                "id": item_id,
+                "returncode": proc.returncode,
+                "stderr_tail": result.get("stderr_tail", ""),
+            },
+        )
     return result
 
 
@@ -105,6 +142,8 @@ def select_items(raw_plan: list[Any], requested_ids: list[str]) -> list[Any]:
 def run_plan(args: argparse.Namespace) -> dict[str, Any]:
     plan_path = Path(args.plan).expanduser().resolve()
     plan_dir = plan_path.parent
+    if not plan_path.exists():
+        raise SystemExit(f"Plan file not found: {plan_path}. Run prepare_trigger_eval_workspace.py first.")
     raw_plan = json.loads(plan_path.read_text(encoding="utf-8"))
     if not isinstance(raw_plan, list):
         raise SystemExit("Plan file must contain a JSON array.")

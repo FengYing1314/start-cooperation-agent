@@ -55,6 +55,21 @@ def explicit_observed_trigger(value: Any) -> bool | None:
     return None
 
 
+def eval_error_evidence(value: Any) -> list[str]:
+    errors: list[str] = []
+    if isinstance(value, dict):
+        if "eval_error" in value:
+            errors.append(str(value.get("eval_error", "") or "eval_error"))
+        if value.get("timeout") is True:
+            errors.append("timeout")
+        for item in value.values():
+            errors.extend(eval_error_evidence(item))
+    elif isinstance(value, list):
+        for item in value:
+            errors.extend(eval_error_evidence(item))
+    return errors
+
+
 def flatten_text(value: Any) -> str:
     if isinstance(value, dict):
         return " ".join(flatten_text(item) for item in value.values())
@@ -83,6 +98,13 @@ def infer_trigger(path: Path, patterns: list[str]) -> tuple[bool | None, str, li
     if not path.exists():
         return None, "missing", []
     events, raw_text = parse_jsonl(path)
+    if not raw_text.strip():
+        return None, "empty", []
+    errors: list[str] = []
+    for event in events:
+        errors.extend(eval_error_evidence(event))
+    if errors:
+        return None, "error", sorted(set(errors))
     for event in events:
         explicit = explicit_observed_trigger(event)
         if explicit is not None:

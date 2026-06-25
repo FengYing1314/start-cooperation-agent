@@ -49,6 +49,15 @@ def next_commands(plan_path: Path) -> dict[str, list[str]]:
     }
 
 
+def next_actions() -> list[str]:
+    return [
+        "Run dry_run first to verify the generated commands.",
+        "Run the full or focused eval command and wait for it to finish.",
+        "Run score only after eval artifacts have been written; do not run eval and score in parallel.",
+        "Use focused_run and focused_score with a real eval id when debugging one prompt.",
+    ]
+
+
 def run_git(repo: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True)
 
@@ -122,6 +131,7 @@ def main() -> int:
         "artifact_dir": str(artifact_dir),
         "plan": str(plan_path),
         "next_commands": next_commands(plan_path),
+        "next_actions": next_actions(),
         "prompt_count": len(plan),
         "artifacts_cleaned": not args.keep_artifacts,
         "removed_artifact_entries": removed_artifact_entries,
