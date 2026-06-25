@@ -762,6 +762,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "full fix-review loop progression" in skill, skill
     assert "non-destructive Codex App preflight" in skill, skill
     assert "read the returned `unsent_handoff.payload_file`" in skill, skill
+    assert "unsent_handoff.after_send_evidence_command" in skill, skill
     assert "run `unsent_handoff.after_send_status_commands` only after the real send succeeds" in skill, skill
     assert "run `unsent_handoff.after_send_failed_command` with a concrete send error" in skill, skill
     assert "reviewer fix send-state project resume" in skill, skill
@@ -811,6 +812,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "do not use `codex exec`/`resume` as proof" in codex_thread, codex_thread
     assert "If it starts with `no`" in codex_thread, codex_thread
     assert "read `unsent_handoff.payload_file`" in codex_thread, codex_thread
+    assert "`unsent_handoff.after_send_evidence_command`" in codex_thread, codex_thread
     assert "`unsent_handoff.after_send_failed_command`" in codex_thread, codex_thread
     assert "Do not mark `fix_required` or `developer_fix_running`" in codex_thread, codex_thread
     assert "record_inbound_handoff.py --kind reviewer_fix" in codex_thread, codex_thread
@@ -851,6 +853,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "--send-evidence" in protocol, protocol
     assert "When it starts with `no`" in protocol, protocol
     assert "use the returned `unsent_handoff`" in protocol, protocol
+    assert "after_send_evidence_command" in protocol, protocol
     assert "only then run `after_send_status_commands`" in protocol, protocol
     assert "run `after_send_failed_command` with the concrete error" in protocol, protocol
     assert "Do not record `fix_required` or `developer_fix_running`" in protocol, protocol
@@ -1753,6 +1756,13 @@ no, D1 thread dev-thread is the unsent target.
     assert "fix_required" in reviewer_fix_unsent_recorded["unsent_handoff"]["after_send_status_commands"][0], (
         reviewer_fix_unsent_recorded
     )
+    assert "artifact" in reviewer_fix_unsent_recorded["unsent_handoff"]["after_send_evidence_command"], (
+        reviewer_fix_unsent_recorded
+    )
+    assert any(
+        "<send evidence>" in item
+        for item in reviewer_fix_unsent_recorded["unsent_handoff"]["after_send_evidence_command"]
+    ), reviewer_fix_unsent_recorded
     assert "blocker" in reviewer_fix_unsent_recorded["unsent_handoff"]["after_send_failed_command"], (
         reviewer_fix_unsent_recorded
     )
@@ -1761,6 +1771,9 @@ no, D1 thread dev-thread is the unsent target.
         for item in reviewer_fix_unsent_recorded["unsent_handoff"]["after_send_failed_command"]
     ), reviewer_fix_unsent_recorded
     assert any("After the real D1 send succeeds" in item for item in reviewer_fix_unsent_recorded["next_actions"]), (
+        reviewer_fix_unsent_recorded
+    )
+    assert any("after_send_evidence_command" in item for item in reviewer_fix_unsent_recorded["next_actions"]), (
         reviewer_fix_unsent_recorded
     )
     assert any("after_send_failed_command" in item for item in reviewer_fix_unsent_recorded["next_actions"]), (
@@ -1783,6 +1796,9 @@ no, D1 thread dev-thread is the unsent target.
     assert len(reviewer_fix_unsent_inspected["reviewer_fix_send_state"]["after_send_status_commands"]) == 2, (
         reviewer_fix_unsent_inspected
     )
+    assert "artifact" in reviewer_fix_unsent_inspected["reviewer_fix_send_state"]["after_send_evidence_command"], (
+        reviewer_fix_unsent_inspected
+    )
     assert "blocker" in reviewer_fix_unsent_inspected["reviewer_fix_send_state"]["after_send_failed_command"], (
         reviewer_fix_unsent_inspected
     )
@@ -1792,9 +1808,23 @@ no, D1 thread dev-thread is the unsent target.
     assert any("send its exact contents to D1" in item for item in reviewer_fix_unsent_inspected["next_actions"]), (
         reviewer_fix_unsent_inspected
     )
+    assert any("after_send_evidence_command" in item for item in reviewer_fix_unsent_inspected["next_actions"]), (
+        reviewer_fix_unsent_inspected
+    )
     assert any("after_send_failed_command" in item for item in reviewer_fix_unsent_inspected["next_actions"]), (
         reviewer_fix_unsent_inspected
     )
+    evidence_command = [
+        item.replace("<send evidence>", '{"threadId":"dev-thread","delivery":"accepted"}')
+        for item in reviewer_fix_unsent_inspected["reviewer_fix_send_state"]["after_send_evidence_command"]
+    ]
+    evidence_result = json.loads(run(evidence_command).stdout)
+    assert evidence_result["kind"] == "artifact", evidence_result
+    assert evidence_result["run_status"] == "", evidence_result
+    evidence_body = (reviewer_fix_unsent_run_dir / evidence_result["file"]).read_text(encoding="utf-8")
+    assert '"delivery":"accepted"' in evidence_body, evidence_result
+    after_evidence_inspected = json.loads(inspect_run(reviewer_fix_unsent_run_dir).stdout)
+    assert after_evidence_inspected["current_status"] == "review_done", after_evidence_inspected
     failed_command = [
         item.replace("<send error>", "transient app send failure")
         for item in reviewer_fix_unsent_inspected["reviewer_fix_send_state"]["after_send_failed_command"]
@@ -1815,6 +1845,9 @@ no, D1 thread dev-thread is the unsent target.
     assert len(project_unsent_runs) == 1, project_after_unsent
     assert project_unsent_runs[0]["reviewer_fix_send_state"]["next_handoff_sent"] == "no", project_unsent_runs[0]
     assert project_unsent_runs[0]["reviewer_fix_send_state"]["send_message_to_thread"]["threadId"] == "dev-thread", (
+        project_unsent_runs[0]
+    )
+    assert "artifact" in project_unsent_runs[0]["reviewer_fix_send_state"]["after_send_evidence_command"], (
         project_unsent_runs[0]
     )
     assert "blocker" in project_unsent_runs[0]["reviewer_fix_send_state"]["after_send_failed_command"], (
