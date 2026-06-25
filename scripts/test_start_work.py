@@ -760,7 +760,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "pending_outbound" in skill, skill
     assert "full fix-review loop progression" in skill, skill
     assert "non-destructive Codex App preflight" in skill, skill
-    assert "If it starts with `no`, send or relay the exact fix payload to D1" in skill, skill
+    assert "read the returned `unsent_handoff.payload_file`" in skill, skill
+    assert "run `unsent_handoff.after_send_status_commands` only after the real send succeeds" in skill, skill
     assert "reviewer fix send-state project resume" in skill, skill
 
     template_index = (SKILL_ROOT / "references" / "templates.md").read_text(encoding="utf-8")
@@ -801,7 +802,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "Codex CLI is not a substitute for Codex App thread transport" in codex_thread, codex_thread
     assert "do not use `codex exec`/`resume` as proof" in codex_thread, codex_thread
     assert "If it starts with `no`" in codex_thread, codex_thread
-    assert "do not mark `fix_required` or `developer_fix_running`" in codex_thread, codex_thread
+    assert "read `unsent_handoff.payload_file`" in codex_thread, codex_thread
+    assert "Do not mark `fix_required` or `developer_fix_running`" in codex_thread, codex_thread
     assert "record_inbound_handoff.py --kind reviewer_fix" in codex_thread, codex_thread
     assert "transport layer" in codex_thread, codex_thread
     assert "scripts/append_event.py --kind message --actor M" not in codex_thread, codex_thread
@@ -838,7 +840,9 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "next_actions" in protocol, protocol
     assert "pending_outbound" in protocol, protocol
     assert "When it starts with `no`" in protocol, protocol
-    assert "do not record `fix_required` or `developer_fix_running`" in protocol, protocol
+    assert "use the returned `unsent_handoff`" in protocol, protocol
+    assert "only then run `after_send_status_commands`" in protocol, protocol
+    assert "Do not record `fix_required` or `developer_fix_running`" in protocol, protocol
     assert "updates `run.json` with the current status and last event" in protocol, protocol
     assert "records both its event status and run status" in protocol, protocol
     assert "full fix-review loop as an executable invariant" in protocol, protocol
@@ -1714,7 +1718,22 @@ no, D1 thread dev-thread is the unsent target.
     assert reviewer_fix_unsent_recorded["recorded_run_status"] == "review_done", reviewer_fix_unsent_recorded
     assert reviewer_fix_unsent_recorded["event"]["thread_id"] == "", reviewer_fix_unsent_recorded
     assert reviewer_fix_unsent_recorded["followup_status_commands"] == [], reviewer_fix_unsent_recorded
-    assert any("before recording fix_required" in item for item in reviewer_fix_unsent_recorded["next_actions"]), (
+    assert reviewer_fix_unsent_recorded["unsent_handoff"]["send_to_thread_id"] == "dev-thread", (
+        reviewer_fix_unsent_recorded
+    )
+    assert reviewer_fix_unsent_recorded["unsent_handoff"]["send_message_to_thread"]["threadId"] == "dev-thread", (
+        reviewer_fix_unsent_recorded
+    )
+    assert reviewer_fix_unsent_recorded["unsent_handoff"]["payload_file"].replace("\\", "/").endswith(
+        "messages/R1-001-custom-blocking-copy.md"
+    ), reviewer_fix_unsent_recorded
+    assert len(reviewer_fix_unsent_recorded["unsent_handoff"]["after_send_status_commands"]) == 2, (
+        reviewer_fix_unsent_recorded
+    )
+    assert "fix_required" in reviewer_fix_unsent_recorded["unsent_handoff"]["after_send_status_commands"][0], (
+        reviewer_fix_unsent_recorded
+    )
+    assert any("After the real D1 send succeeds" in item for item in reviewer_fix_unsent_recorded["next_actions"]), (
         reviewer_fix_unsent_recorded
     )
     reviewer_fix_unsent_inspected = json.loads(inspect_run(reviewer_fix_unsent_run_dir).stdout)
@@ -1725,10 +1744,19 @@ no, D1 thread dev-thread is the unsent target.
     assert reviewer_fix_unsent_inspected["reviewer_fix_send_state"]["event_id"] == "R1-001", (
         reviewer_fix_unsent_inspected
     )
+    assert reviewer_fix_unsent_inspected["reviewer_fix_send_state"]["send_to_thread_id"] == "dev-thread", (
+        reviewer_fix_unsent_inspected
+    )
+    assert reviewer_fix_unsent_inspected["reviewer_fix_send_state"]["send_message_to_thread"]["threadId"] == "dev-thread", (
+        reviewer_fix_unsent_inspected
+    )
+    assert len(reviewer_fix_unsent_inspected["reviewer_fix_send_state"]["after_send_status_commands"]) == 2, (
+        reviewer_fix_unsent_inspected
+    )
     assert any("Next handoff sent: no" in item for item in reviewer_fix_unsent_inspected["next_actions"]), (
         reviewer_fix_unsent_inspected
     )
-    assert any("before appending fix_required" in item for item in reviewer_fix_unsent_inspected["next_actions"]), (
+    assert any("send its exact contents to D1" in item for item in reviewer_fix_unsent_inspected["next_actions"]), (
         reviewer_fix_unsent_inspected
     )
     project_after_unsent = json.loads(inspect_project(repo, "--limit", "10").stdout)
@@ -1739,6 +1767,9 @@ no, D1 thread dev-thread is the unsent target.
     ]
     assert len(project_unsent_runs) == 1, project_after_unsent
     assert project_unsent_runs[0]["reviewer_fix_send_state"]["next_handoff_sent"] == "no", project_unsent_runs[0]
+    assert project_unsent_runs[0]["reviewer_fix_send_state"]["send_message_to_thread"]["threadId"] == "dev-thread", (
+        project_unsent_runs[0]
+    )
     assert any("Next handoff sent: no" in item for item in project_unsent_runs[0]["next_actions"]), (
         project_unsent_runs[0]
     )

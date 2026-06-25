@@ -126,6 +126,14 @@ def roster_thread_id(run_dir: Path, role: str) -> str:
     return thread_id
 
 
+def send_message_prompt(thread_id: str, payload_file: str) -> dict[str, str]:
+    return {
+        "threadId": thread_id,
+        "prompt_file": payload_file,
+        "prompt_instruction": "Read prompt_file as UTF-8 and pass its exact contents as prompt; do not send only the file path.",
+    }
+
+
 def followup_status_items(spec: dict[str, Any]) -> list[dict[str, str]]:
     items = spec.get("followup_statuses", [])
     if isinstance(items, list) and items:
@@ -220,7 +228,8 @@ def record(args: argparse.Namespace) -> dict[str, Any]:
         }
 
     sent_word = next_handoff_sent_word(body)
-    thread_id = args.thread_id.strip() or roster_thread_id(run_dir, spec["to"])
+    target_thread_id = args.thread_id.strip() or roster_thread_id(run_dir, spec["to"])
+    thread_id = target_thread_id
     if args.kind == "reviewer_fix" and sent_word == "no":
         thread_id = ""
     event_args = [
@@ -250,11 +259,24 @@ def record(args: argparse.Namespace) -> dict[str, Any]:
 
     event = append_event(event_args)
     followups = followup_status_commands(run_dir, spec)
+    deferred_followups: list[list[str]] = []
+    unsent_handoff: dict[str, Any] | None = None
     next_actions = [spec["next_action"]]
     if args.kind == "reviewer_fix" and sent_word == "no":
+        payload_file = str(run_dir / str(event.get("file", ""))) if event.get("file") else ""
+        deferred_followups = followups
+        unsent_handoff = {
+            "send_to": spec["to"],
+            "send_to_thread_id": target_thread_id,
+            "payload_file": payload_file,
+            "send_message_to_thread": send_message_prompt(target_thread_id, payload_file),
+            "after_send_status_commands": deferred_followups,
+        }
         followups = []
         next_actions = [
-            "Reviewer fix copy says Next handoff sent: no; send or relay the exact fix payload to D1 before recording fix_required or developer_fix_running.",
+            "Reviewer fix copy says Next handoff sent: no; read unsent_handoff.payload_file and send its exact contents to D1 with send_message_to_thread.",
+            "Do not send only the payload file path.",
+            "After the real D1 send succeeds, run unsent_handoff.after_send_status_commands in order.",
         ]
     if not followups and run_status == "blocked":
         next_actions = ["Report the blocker and stop the loop until the blocking condition changes."]
@@ -267,6 +289,7 @@ def record(args: argparse.Namespace) -> dict[str, Any]:
         "recorded_run_status": run_status,
         "followup_status_command": followups[0] if len(followups) == 1 else [],
         "followup_status_commands": followups,
+        "unsent_handoff": unsent_handoff or {},
         "next_actions": next_actions,
     }
 

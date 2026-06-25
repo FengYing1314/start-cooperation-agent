@@ -124,7 +124,7 @@ Manager send sequence:
 6. If the send fails, run the returned `finalize_failed_command` with the concrete send error; do not advance to the next run status.
 ```
 
-Reviewer fix handoffs are Reviewer-originated. Reviewer sends the fix payload directly to D1 and sends Manager a separate copy. Manager records that copy with `scripts/record_inbound_handoff.py --kind reviewer_fix`. If `Next handoff sent:` starts with `yes`, follow the returned status commands in order. If it starts with `no`, first send or relay the exact fix payload to D1; do not mark `fix_required` or `developer_fix_running` before that real send.
+Reviewer fix handoffs are Reviewer-originated. Reviewer sends the fix payload directly to D1 and sends Manager a separate copy. Manager records that copy with `scripts/record_inbound_handoff.py --kind reviewer_fix`. If `Next handoff sent:` starts with `yes`, follow the returned status commands in order. If it starts with `no`, read `unsent_handoff.payload_file`, send its exact contents to D1 with `send_message_to_thread`, then run `unsent_handoff.after_send_status_commands` only after the real send succeeds. Do not mark `fix_required` or `developer_fix_running` before that real send.
 
 Message payloads must include:
 

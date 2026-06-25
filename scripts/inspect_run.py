@@ -12,6 +12,7 @@ from start_work_contract import RUN_STATUSES, current_run_status, next_allowed_s
 from validate_handoff import extract_label, validate_payload
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+APPEND_EVENT = SCRIPT_DIR / "append_event.py"
 FINALIZE_OUTBOUND_HANDOFF = SCRIPT_DIR / "finalize_outbound_handoff.py"
 
 OUTBOUND_RESUME = {
@@ -89,7 +90,56 @@ def next_handoff_sent_word(text: str) -> str:
     return value.split(None, 1)[0].strip(".,;:").lower()
 
 
-def latest_reviewer_fix_send_state(run_dir: Path, events: list[dict[str, object]]) -> dict[str, object] | None:
+def roster_thread_id(metadata: dict[str, object], role: str) -> str:
+    team = metadata.get("team", {})
+    roster = team.get("roster", {}) if isinstance(team, dict) else {}
+    entry = roster.get(role, {}) if isinstance(roster, dict) else {}
+    return str(entry.get("thread_id", "")).strip() if isinstance(entry, dict) else ""
+
+
+def send_message_prompt(thread_id: str, payload_file: str) -> dict[str, str]:
+    return {
+        "threadId": thread_id,
+        "prompt_file": payload_file,
+        "prompt_instruction": "Read prompt_file as UTF-8 and pass its exact contents as prompt; do not send only the file path.",
+    }
+
+
+def reviewer_fix_after_send_commands(run_dir: Path, d1_thread_id: str) -> list[list[str]]:
+    commands = []
+    for status, summary in [
+        ("fix_required", "blocking findings require fixes"),
+        ("developer_fix_running", "blocking fix request sent"),
+    ]:
+        commands.append(
+            [
+                sys.executable,
+                str(APPEND_EVENT),
+                "--run-dir",
+                str(run_dir),
+                "--kind",
+                "status",
+                "--actor",
+                "R1",
+                "--summary",
+                summary,
+                "--run-status",
+                status,
+                "--to",
+                "D1",
+                "--thread-id",
+                d1_thread_id,
+                "--print-json",
+            ]
+        )
+    return commands
+
+
+def latest_reviewer_fix_send_state(
+    run_dir: Path,
+    events: list[dict[str, object]],
+    metadata: dict[str, object],
+) -> dict[str, object] | None:
     for event in reversed(events):
         if event.get("actor") != "R1" or event.get("to") != "D1":
             continue
@@ -122,11 +172,26 @@ def latest_reviewer_fix_send_state(run_dir: Path, events: list[dict[str, object]
                 "problems": [str(problem) for problem in validation.get("problems", [])],
             }
         sent_word = next_handoff_sent_word(payload_text)
-        return {
+        state = {
             "event_id": event_id,
             "file": file_name,
             "next_handoff_sent": sent_word,
         }
+        if sent_word == "no":
+            d1_thread_id = roster_thread_id(metadata, "D1")
+            payload_file = str(payload_path)
+            state.update(
+                {
+                    "send_to": "D1",
+                    "send_to_thread_id": d1_thread_id,
+                    "payload_file": payload_file,
+                    "send_message_to_thread": send_message_prompt(d1_thread_id, payload_file),
+                    "after_send_status_commands": reviewer_fix_after_send_commands(run_dir, d1_thread_id)
+                    if d1_thread_id
+                    else [],
+                }
+            )
+        return state
     return None
 
 
@@ -290,8 +355,9 @@ def next_actions(
             if sent_word == "no":
                 return [
                     "Latest reviewer_fix copy says Next handoff sent: no.",
-                    "Send or relay that exact fix payload to D1 before appending fix_required or developer_fix_running.",
-                    "After the real D1 send succeeds, record fix_required and then developer_fix_running.",
+                    "Read reviewer_fix_send_state.payload_file and send its exact contents to D1 with send_message_to_thread.",
+                    "Do not send only the payload file path.",
+                    "After the real D1 send succeeds, run reviewer_fix_send_state.after_send_status_commands in order.",
                 ]
             if sent_word == "yes":
                 return [
@@ -386,7 +452,7 @@ def inspect_run(run_dir: Path) -> dict[str, object]:
 
     allowed = next_allowed_statuses(current_status)
     pending_outbound = None if problems else find_pending_outbound(run_dir, current_status, events)
-    reviewer_fix_send_state = None if problems else latest_reviewer_fix_send_state(run_dir, events)
+    reviewer_fix_send_state = None if problems else latest_reviewer_fix_send_state(run_dir, events, metadata)
     return {
         "ok": not problems,
         "run_dir": str(run_dir),
