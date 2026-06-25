@@ -5,10 +5,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+AUTO_CODEX_NAMES = {"", "auto", "codex", "codex.exe"}
 
 
 def tail(value: str, limit: int = 1200) -> str:
@@ -20,7 +23,7 @@ def tail(value: str, limit: int = 1200) -> str:
 def next_actions(ok: bool, codex_bin: str) -> list[str]:
     if ok:
         return [
-            "Run prepare_trigger_eval_workspace.py with this codex_bin.",
+            f"Run prepare_trigger_eval_workspace.py with --codex-bin {codex_bin!r}.",
             "Run the returned dry_run command before real evals.",
             "Run eval and score sequentially; do not score before artifacts are written.",
         ]
@@ -31,66 +34,135 @@ def next_actions(ok: bool, codex_bin: str) -> list[str]:
     ]
 
 
+def add_candidate(candidates: list[str], value: str | None) -> None:
+    candidate = (value or "").strip()
+    if candidate and candidate not in candidates:
+        candidates.append(candidate)
+
+
+def windows_codex_paths() -> list[str]:
+    paths: list[str] = []
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    if local_app_data:
+        paths.append(str(Path(local_app_data) / "Programs" / "OpenAI" / "Codex" / "bin" / "codex.exe"))
+    paths.append(str(Path.home() / "AppData" / "Local" / "Programs" / "OpenAI" / "Codex" / "bin" / "codex.exe"))
+    return paths
+
+
+def codex_candidates(requested: str) -> list[str]:
+    requested = requested.strip()
+    if requested not in AUTO_CODEX_NAMES:
+        return [requested]
+
+    candidates: list[str] = []
+    add_candidate(candidates, os.environ.get("CODEX_BIN"))
+    add_candidate(candidates, "codex" if requested in {"", "auto"} else requested)
+    add_candidate(candidates, "codex.exe")
+    for path in windows_codex_paths():
+        add_candidate(candidates, path)
+    return candidates
+
+
+def resolve_candidate(candidate: str) -> str:
+    resolved = shutil.which(candidate)
+    if resolved:
+        return resolved
+    path = Path(candidate).expanduser()
+    if path.is_file():
+        return str(path)
+    return ""
+
+
 def check_cli(args: argparse.Namespace) -> dict[str, object]:
-    codex_bin = args.codex_bin.strip()
+    requested_codex_bin = args.codex_bin.strip() or "auto"
     cwd = Path(args.cwd).expanduser().resolve() if args.cwd else Path.cwd().resolve()
-    resolved = shutil.which(codex_bin)
-    command = [codex_bin, "--version"]
+    candidates = codex_candidates(requested_codex_bin)
+    attempted: list[dict[str, object]] = []
     base = {
-        "codex_bin": codex_bin,
-        "resolved_path": resolved or "",
+        "requested_codex_bin": requested_codex_bin,
         "cwd": str(cwd),
-        "command": command,
         "timeout_seconds": args.timeout_seconds,
+        "candidate_paths": candidates,
     }
-    if resolved is None and not Path(codex_bin).expanduser().is_file():
-        result = {
-            **base,
-            "ok": False,
-            "returncode": None,
-            "error": "Executable not found on PATH or filesystem.",
-            "next_actions": next_actions(False, codex_bin),
-        }
-        return result
 
-    try:
-        proc = subprocess.run(
-            command,
-            cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=None if args.timeout_seconds <= 0 else args.timeout_seconds,
-            check=False,
+    last_error = "Executable not found on PATH or filesystem."
+    for candidate in candidates:
+        resolved_path = resolve_candidate(candidate)
+        command_bin = resolved_path or candidate
+        command = [command_bin, "--version"]
+        attempt: dict[str, object] = {
+            "candidate": candidate,
+            "resolved_path": resolved_path,
+            "command": command,
+        }
+        if not resolved_path:
+            attempt.update({"ok": False, "returncode": None, "error": "Executable not found on PATH or filesystem."})
+            attempted.append(attempt)
+            continue
+        try:
+            proc = subprocess.run(
+                command,
+                cwd=str(cwd),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=None if args.timeout_seconds <= 0 else args.timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            attempt.update(
+                {
+                    "ok": False,
+                    "returncode": None,
+                    "timeout": True,
+                    "stdout_tail": tail(str(exc.stdout or "")),
+                    "stderr_tail": tail(str(exc.stderr or "")),
+                }
+            )
+            attempted.append(attempt)
+            last_error = "Timed out while launching Codex CLI."
+            continue
+        except OSError as exc:
+            attempt.update({"ok": False, "returncode": None, "error": str(exc)})
+            attempted.append(attempt)
+            last_error = str(exc)
+            continue
+
+        attempt.update(
+            {
+                "ok": proc.returncode == 0,
+                "returncode": proc.returncode,
+                "stdout_tail": tail(proc.stdout),
+                "stderr_tail": tail(proc.stderr),
+            }
         )
-    except subprocess.TimeoutExpired as exc:
-        return {
-            **base,
-            "ok": False,
-            "returncode": None,
-            "timeout": True,
-            "stdout_tail": tail(str(exc.stdout or "")),
-            "stderr_tail": tail(str(exc.stderr or "")),
-            "next_actions": next_actions(False, codex_bin),
-        }
-    except OSError as exc:
-        return {
-            **base,
-            "ok": False,
-            "returncode": None,
-            "error": str(exc),
-            "next_actions": next_actions(False, codex_bin),
-        }
+        attempted.append(attempt)
+        if proc.returncode == 0:
+            return {
+                **base,
+                "ok": True,
+                "codex_bin": command_bin,
+                "resolved_path": resolved_path,
+                "command": command,
+                "returncode": proc.returncode,
+                "stdout_tail": tail(proc.stdout),
+                "stderr_tail": tail(proc.stderr),
+                "attempted": attempted,
+                "next_actions": next_actions(True, command_bin),
+            }
+        last_error = f"Candidate exited with code {proc.returncode}: {command_bin}"
 
-    ok = proc.returncode == 0
     return {
         **base,
-        "ok": ok,
-        "returncode": proc.returncode,
-        "stdout_tail": tail(proc.stdout),
-        "stderr_tail": tail(proc.stderr),
-        "next_actions": next_actions(ok, codex_bin),
+        "ok": False,
+        "codex_bin": "",
+        "resolved_path": "",
+        "command": [],
+        "returncode": None,
+        "error": last_error,
+        "attempted": attempted,
+        "next_actions": next_actions(False, requested_codex_bin),
     }
 
 

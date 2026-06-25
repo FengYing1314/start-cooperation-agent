@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -45,8 +46,8 @@ def import_contract_module():
     return start_work_contract
 
 
-def run(command: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
-    proc = subprocess.run(command, capture_output=True, text=True, check=False)
+def run(command: list[str], *, check: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    proc = subprocess.run(command, capture_output=True, text=True, check=False, env=env)
     if check and proc.returncode != 0:
         raise AssertionError(
             f"Command failed: {' '.join(command)}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
@@ -61,8 +62,8 @@ def make_repo(root: Path, name: str) -> Path:
     return repo
 
 
-def script(path: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return run([sys.executable, str(path), *args], check=check)
+def script(path: Path, *args: str, check: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    return run([sys.executable, str(path), *args], check=check, env=env)
 
 
 def init_team(repo: Path, *args: str) -> dict[str, object]:
@@ -1510,6 +1511,7 @@ def test_trigger_eval_prompts_are_balanced(root: Path) -> None:
     assert any("$start-work" in row["prompt"] for row in rows if row["should_trigger"] == "true"), rows
     assert any("No multi-agent workflow needed" in row["prompt"] for row in rows if row["should_trigger"] == "false"), rows
     assert "prepare_trigger_eval_workspace.py --output-dir" in text, text
+    assert "CODEX_BIN" in text, text
     assert "next_commands" in text, text
     assert "next_actions" in text, text
     assert "cli_check" in text, text
@@ -1536,6 +1538,25 @@ def test_trigger_eval_cli_check_reports_launchability(root: Path) -> None:
     assert ok["returncode"] == 0, ok
     assert ok["command"] == [sys.executable, "--version"], ok
     assert any("dry_run" in item for item in ok["next_actions"]), ok
+
+    env = os.environ.copy()
+    env["CODEX_BIN"] = sys.executable
+    env["PATH"] = ""
+    auto = json.loads(
+        script(
+            CHECK_TRIGGER_EVAL_CLI,
+            "--codex-bin",
+            "auto",
+            "--cwd",
+            str(root),
+            "--print-json",
+            env=env,
+        ).stdout
+    )
+    assert auto["ok"] is True, auto
+    assert auto["codex_bin"] == sys.executable, auto
+    assert auto["command"] == [sys.executable, "--version"], auto
+    assert auto["candidate_paths"][0] == sys.executable, auto
 
     missing = script(
         CHECK_TRIGGER_EVAL_CLI,
@@ -1575,7 +1596,14 @@ def test_prepare_trigger_eval_workspace(root: Path) -> None:
     assert PREPARE_TRIGGER_EVAL_WORKSPACE.exists(), PREPARE_TRIGGER_EVAL_WORKSPACE
     output_dir = root / "fixture"
     result = json.loads(
-        script(PREPARE_TRIGGER_EVAL_WORKSPACE, "--output-dir", str(output_dir), "--print-json").stdout
+        script(
+            PREPARE_TRIGGER_EVAL_WORKSPACE,
+            "--output-dir",
+            str(output_dir),
+            "--codex-bin",
+            sys.executable,
+            "--print-json",
+        ).stdout
     )
     repo = Path(result["repo"])
     plan_path = Path(result["plan"])
@@ -1588,6 +1616,9 @@ def test_prepare_trigger_eval_workspace(root: Path) -> None:
     assert result["prompt_count"] == len(plan), result
     assert all(Path(item["artifact"]).parent == Path(result["artifact_dir"]) for item in plan), plan
     assert all(item["cwd"] == str(repo) for item in plan), plan
+    assert result["codex_bin"], result
+    assert result["cli_check"]["ok"] is True, result
+    assert all(item["command"][0] == result["codex_bin"] for item in plan), plan
     commands = result["next_commands"]
     assert commands["cli_check"][1].endswith("check_trigger_eval_cli.py"), commands
     assert commands["cli_check"][commands["cli_check"].index("--cwd") + 1] == str(repo), commands
@@ -1603,7 +1634,14 @@ def test_prepare_trigger_eval_workspace(root: Path) -> None:
     stale = Path(result["artifact_dir"]) / "stale.jsonl"
     stale.write_text(json.dumps({"start_work_triggered": True}) + "\n", encoding="utf-8")
     refreshed = json.loads(
-        script(PREPARE_TRIGGER_EVAL_WORKSPACE, "--output-dir", str(output_dir), "--print-json").stdout
+        script(
+            PREPARE_TRIGGER_EVAL_WORKSPACE,
+            "--output-dir",
+            str(output_dir),
+            "--codex-bin",
+            sys.executable,
+            "--print-json",
+        ).stdout
     )
     assert refreshed["artifacts_cleaned"] is True, refreshed
     assert refreshed["removed_artifact_entries"] >= 1, refreshed
@@ -1616,6 +1654,8 @@ def test_prepare_trigger_eval_workspace(root: Path) -> None:
             PREPARE_TRIGGER_EVAL_WORKSPACE,
             "--output-dir",
             str(output_dir),
+            "--codex-bin",
+            sys.executable,
             "--keep-artifacts",
             "--print-json",
         ).stdout

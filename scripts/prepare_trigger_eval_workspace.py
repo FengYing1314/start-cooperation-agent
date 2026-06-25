@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+from check_trigger_eval_cli import check_cli
 from plan_trigger_evals import DEFAULT_PROMPTS, build_plan
 
 
@@ -111,6 +112,12 @@ def main() -> int:
     parser.add_argument("--output-dir", required=True, help="Directory where the fixture should be created.")
     parser.add_argument("--prompts", default=str(DEFAULT_PROMPTS), help="Markdown trigger eval prompt table.")
     parser.add_argument("--codex-bin", default="codex", help="Codex CLI executable name or path.")
+    parser.add_argument(
+        "--cli-timeout-seconds",
+        type=float,
+        default=15.0,
+        help="Codex CLI version-check timeout used to resolve codex-bin. Use 0 to disable.",
+    )
     parser.add_argument("--no-git", action="store_true", help="Do not initialize the fixture as a git repository.")
     parser.add_argument("--keep-artifacts", action="store_true", help="Preserve existing artifact files in output-dir.")
     parser.add_argument("--print-json", action="store_true", help="Print machine-readable result.")
@@ -124,13 +131,21 @@ def main() -> int:
         removed_artifact_entries = clear_directory_contents(artifact_dir, root=root)
     artifact_dir.mkdir(parents=True, exist_ok=True)
     write_fixture(repo, init_git=not args.no_git)
+    cli_check = check_cli(
+        SimpleNamespace(
+            codex_bin=args.codex_bin,
+            cwd=str(repo),
+            timeout_seconds=args.cli_timeout_seconds,
+        )
+    )
+    codex_bin = str(cli_check.get("codex_bin", "")) or args.codex_bin
 
     plan = build_plan(
         SimpleNamespace(
             prompts=args.prompts,
             artifact_dir=str(artifact_dir),
             cwd=str(repo),
-            codex_bin=args.codex_bin,
+            codex_bin=codex_bin,
         )
     )
     plan_path = root / "trigger-eval-plan.json"
@@ -141,7 +156,9 @@ def main() -> int:
         "repo": str(repo),
         "artifact_dir": str(artifact_dir),
         "plan": str(plan_path),
-        "next_commands": next_commands(plan_path, repo=repo, codex_bin=args.codex_bin),
+        "codex_bin": codex_bin,
+        "cli_check": cli_check,
+        "next_commands": next_commands(plan_path, repo=repo, codex_bin=codex_bin),
         "next_actions": next_actions(),
         "prompt_count": len(plan),
         "artifacts_cleaned": not args.keep_artifacts,
