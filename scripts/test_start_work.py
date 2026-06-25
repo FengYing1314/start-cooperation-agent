@@ -1588,6 +1588,10 @@ no, D1 thread dev-thread is the unsent target.
             "reviewer_fix",
             "--body-file",
             str(reviewer_fix_unsent_payload),
+            "--thread-id",
+            "dev-thread",
+            "--summary",
+            "custom blocking copy",
             "--print-json",
         ).stdout
     )
@@ -1601,6 +1605,9 @@ no, D1 thread dev-thread is the unsent target.
     reviewer_fix_unsent_inspected = json.loads(inspect_run(reviewer_fix_unsent_run_dir).stdout)
     assert reviewer_fix_unsent_inspected["current_status"] == "review_done", reviewer_fix_unsent_inspected
     assert reviewer_fix_unsent_inspected["reviewer_fix_send_state"]["next_handoff_sent"] == "no", (
+        reviewer_fix_unsent_inspected
+    )
+    assert reviewer_fix_unsent_inspected["reviewer_fix_send_state"]["event_id"] == "R1-001", (
         reviewer_fix_unsent_inspected
     )
     assert any("Next handoff sent: no" in item for item in reviewer_fix_unsent_inspected["next_actions"]), (

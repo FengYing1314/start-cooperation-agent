@@ -222,7 +222,7 @@ def record(args: argparse.Namespace) -> dict[str, Any]:
     sent_word = next_handoff_sent_word(body)
     thread_id = args.thread_id.strip() or roster_thread_id(run_dir, spec["to"])
     if args.kind == "reviewer_fix" and sent_word == "no":
-        thread_id = args.thread_id.strip()
+        thread_id = ""
     event_args = [
         "--run-dir",
         str(run_dir),

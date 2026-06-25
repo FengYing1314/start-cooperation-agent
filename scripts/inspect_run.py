@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from start_work_contract import RUN_STATUSES, current_run_status, next_allowed_statuses
-from validate_handoff import extract_label
+from validate_handoff import extract_label, validate_payload
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 FINALIZE_OUTBOUND_HANDOFF = SCRIPT_DIR / "finalize_outbound_handoff.py"
@@ -95,16 +95,17 @@ def latest_reviewer_fix_send_state(run_dir: Path, events: list[dict[str, object]
             continue
         if event.get("run_status") != "review_done":
             continue
-        summary = str(event.get("summary", "")).lower()
-        if "reviewer fix" not in summary:
-            continue
         file_name = str(event.get("file", "")).strip()
-        payload_text = ""
-        if file_name:
-            payload_path = run_dir / file_name
-            if payload_path.exists():
-                payload_text = payload_path.read_text(encoding="utf-8")
-        sent_word = next_handoff_sent_word(payload_text) if payload_text else ""
+        if not file_name:
+            continue
+        payload_path = run_dir / file_name
+        if not payload_path.exists():
+            continue
+        payload_text = payload_path.read_text(encoding="utf-8")
+        validation = validate_payload("reviewer_fix", payload_text)
+        if not validation["ok"]:
+            continue
+        sent_word = next_handoff_sent_word(payload_text)
         return {
             "event_id": event.get("id", ""),
             "file": file_name,
