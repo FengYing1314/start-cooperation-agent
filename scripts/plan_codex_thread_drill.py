@@ -20,6 +20,43 @@ def command(script_name: str, *args: str) -> list[str]:
     return [sys.executable, str(SCRIPT_DIR / script_name), *args]
 
 
+def normalize_path_text(value: str) -> str:
+    return value.strip().replace("/", "\\").rstrip("\\").casefold()
+
+
+def parse_codex_project_entries(entries: list[str]) -> list[dict[str, str]]:
+    projects: list[dict[str, str]] = []
+    for raw in entries:
+        text = raw.strip()
+        if not text:
+            continue
+        project_id = ""
+        path = text
+        if "=" in text:
+            project_id, path = text.split("=", 1)
+        projects.append({"project_id": project_id.strip(), "path": path.strip()})
+    return projects
+
+
+def codex_project_match(repo: Path, codex_projects: list[dict[str, str]]) -> dict[str, object]:
+    repo_text = str(repo)
+    repo_norm = normalize_path_text(repo_text)
+    matches = [
+        project
+        for project in codex_projects
+        if normalize_path_text(project.get("path", "")) == repo_norm
+        or normalize_path_text(project.get("project_id", "")) == repo_norm
+    ]
+    return {
+        "required_for_live_drill": True,
+        "checked": bool(codex_projects),
+        "matched": bool(matches),
+        "repo": repo_text,
+        "candidate_count": len(codex_projects),
+        "matches": matches,
+    }
+
+
 def count_pending(latest_runs: object) -> tuple[int, int]:
     if not isinstance(latest_runs, list):
         return 0, 0
@@ -63,6 +100,7 @@ def non_destructive_preflight(repo: Path) -> list[dict[str, object]]:
             "step": "match_project",
             "tool": "list_projects",
             "purpose": "Select the Codex App project whose path exactly matches the repo.",
+            "followup": "Rerun this script with --codex-project <projectId=path> entries from list_projects for deterministic matching.",
             "allowed_without_live_approval": True,
         },
         {
@@ -191,9 +229,16 @@ def live_drill_when_approved(repo: Path) -> list[dict[str, object]]:
 def recommended_next_actions(
     *,
     team: dict[str, Any],
+    project_match: dict[str, object],
     pending_outbound_count: int,
     reviewer_fix_needs_send_count: int,
 ) -> list[str]:
+    if project_match.get("checked") and not project_match.get("matched"):
+        return [
+            "Open or add a Codex App project whose path exactly matches this repo before a live thread drill.",
+            "Do not create role threads against a different project target.",
+            "After the matching project appears in list_projects, rerun plan_codex_thread_drill.py with --codex-project <projectId=path>.",
+        ]
     if pending_outbound_count or reviewer_fix_needs_send_count:
         return [
             "Resolve existing pending sends before starting a live drill.",
@@ -213,21 +258,24 @@ def recommended_next_actions(
         ]
     if team.get("codex_thread_ready"):
         return [
-            "Ask the user for explicit live-drill approval, then run the tiny route exercise.",
+            "Confirm the exact Codex App project target with list_projects, then ask the user for explicit live-drill approval.",
             "The drill should prove M->D1, D1->M, M->R1, and R1->M or R1->D1 plus Manager copy without Manager polling.",
         ]
     return ["Inspect team readiness again before attempting a live drill."]
 
 
-def build_plan(repo: Path, limit: int) -> dict[str, object]:
+def build_plan(repo: Path, limit: int, codex_projects: list[dict[str, str]]) -> dict[str, object]:
     project = inspect_project(repo, limit)
     team = inspect_team(repo)
+    project_match = codex_project_match(repo, codex_projects)
     pending_outbound_count, reviewer_fix_needs_send_count = count_pending(project.get("latest_runs"))
+    project_gate_ok = not project_match["checked"] or bool(project_match["matched"])
     ready_for_live_drill = bool(
         team.get("codex_thread_ready")
         and not pending_outbound_count
         and not reviewer_fix_needs_send_count
         and not project.get("problems")
+        and project_gate_ok
     )
     return {
         "ok": True,
@@ -235,6 +283,7 @@ def build_plan(repo: Path, limit: int) -> dict[str, object]:
         "ready_for_live_drill": ready_for_live_drill,
         "requires_explicit_live_drill_approval": True,
         "can_run_non_destructive_preflight_now": True,
+        "codex_project_match": project_match,
         "current_state": {
             "team_ok": bool(team.get("ok")),
             "codex_thread_ready": bool(team.get("codex_thread_ready")),
@@ -251,6 +300,7 @@ def build_plan(repo: Path, limit: int) -> dict[str, object]:
         "live_drill_when_approved": live_drill_when_approved(repo),
         "recommended_next_actions": recommended_next_actions(
             team=team,
+            project_match=project_match,
             pending_outbound_count=pending_outbound_count,
             reviewer_fix_needs_send_count=reviewer_fix_needs_send_count,
         ),
@@ -259,10 +309,16 @@ def build_plan(repo: Path, limit: int) -> dict[str, object]:
 
 def print_text(plan: dict[str, object]) -> None:
     state = plan.get("current_state", {})
+    project_match = plan.get("codex_project_match", {})
     print(f"OK: {str(plan.get('ok', False)).lower()}")
     print(f"Repo: {plan.get('repo', '')}")
     print(f"Ready For Live Drill: {str(plan.get('ready_for_live_drill', False)).lower()}")
     print(f"Requires Explicit Live Drill Approval: {str(plan.get('requires_explicit_live_drill_approval', True)).lower()}")
+    if isinstance(project_match, dict):
+        checked = str(project_match.get("checked", False)).lower()
+        matched = str(project_match.get("matched", False)).lower()
+        print(f"Codex Project Match Checked: {checked}")
+        print(f"Codex Project Matched: {matched}")
     if isinstance(state, dict):
         print(f"Codex Thread Ready: {str(state.get('codex_thread_ready', False)).lower()}")
         print(f"Pending Outbound Sends: {state.get('pending_outbound_count', 0)}")
@@ -278,13 +334,19 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=".", help="Repository root or any path inside it.")
     parser.add_argument("--limit", type=int, default=5, help="Recent run count to inspect for pending sends.")
+    parser.add_argument(
+        "--codex-project",
+        action="append",
+        default=[],
+        help="Codex App project entry from list_projects as <projectId=path>. Repeat for each candidate.",
+    )
     parser.add_argument("--print-json", action="store_true", help="Print machine-readable plan.")
     args = parser.parse_args()
 
     if args.limit < 0:
         raise SystemExit("--limit must be 0 or greater.")
     repo, _ = resolve_repo(args.repo)
-    plan = build_plan(repo, args.limit)
+    plan = build_plan(repo, args.limit, parse_codex_project_entries(args.codex_project))
     if args.print_json:
         print(json.dumps(plan, ensure_ascii=False, indent=2))
     else:

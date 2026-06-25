@@ -248,8 +248,11 @@ def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> Non
     assert unready["ready_for_live_drill"] is False, unready
     assert unready["requires_explicit_live_drill_approval"] is True, unready
     assert unready["can_run_non_destructive_preflight_now"] is True, unready
+    assert unready["codex_project_match"]["required_for_live_drill"] is True, unready
+    assert unready["codex_project_match"]["checked"] is False, unready
     assert any(step.get("tool") == "list_projects" for step in unready["non_destructive_preflight"]), unready
     assert any(step.get("tool") == "list_threads" for step in unready["non_destructive_preflight"]), unready
+    assert any("codex-project" in str(step.get("followup", "")) for step in unready["non_destructive_preflight"]), unready
     blocked_tools = {item.get("tool") for item in unready["blocked_without_approval"]}
     assert {"create_thread", "send_message_to_thread", "read_thread"} <= blocked_tools, unready
     assert any("explicit approval" in item for item in unready["recommended_next_actions"]), unready
@@ -272,6 +275,7 @@ def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> Non
     assert state["pending_outbound_count"] == 0, ready
     assert state["reviewer_fix_needs_send_count"] == 0, ready
     assert state["target_presence"]["M"]["thread_id_present"] is True, ready
+    assert ready["codex_project_match"]["checked"] is False, ready
     drill_text = json.dumps(ready["live_drill_when_approved"], ensure_ascii=False)
     assert "init_team.py" in drill_text, drill_text
     assert "send_message_to_thread" in drill_text, drill_text
@@ -279,9 +283,23 @@ def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> Non
     assert "reviewer_accepted" in drill_text, drill_text
     assert "reviewer_fix directly to D1" in drill_text, drill_text
     assert any("without Manager polling" in item for item in ready["recommended_next_actions"]), ready
+    assert any("list_projects" in item for item in ready["recommended_next_actions"]), ready
+
+    unmatched = json.loads(plan_codex_thread_drill(repo, "--codex-project", "other-project=C:\\other\\repo").stdout)
+    assert unmatched["codex_project_match"]["checked"] is True, unmatched
+    assert unmatched["codex_project_match"]["matched"] is False, unmatched
+    assert unmatched["ready_for_live_drill"] is False, unmatched
+    assert any("exactly matches this repo" in item for item in unmatched["recommended_next_actions"]), unmatched
+
+    matched = json.loads(plan_codex_thread_drill(repo, "--codex-project", f"project-1={repo}").stdout)
+    assert matched["codex_project_match"]["checked"] is True, matched
+    assert matched["codex_project_match"]["matched"] is True, matched
+    assert matched["codex_project_match"]["matches"][0]["project_id"] == "project-1", matched
+    assert matched["ready_for_live_drill"] is True, matched
 
     text_result = script(PLAN_CODEX_THREAD_DRILL, "--repo", str(repo))
     assert "Requires Explicit Live Drill Approval: true" in text_result.stdout, text_result.stdout
+    assert "Codex Project Match Checked: false" in text_result.stdout, text_result.stdout
 
 
 def test_project_inspection_summarizes_team_and_recent_runs(root: Path) -> None:
@@ -787,6 +805,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "inspect_run.py" in skill, skill
     assert "inspect_project.py" in skill, skill
     assert "plan_codex_thread_drill.py" in skill, skill
+    assert "--codex-project" in skill, skill
     assert "prepare_outbound_handoff.py" in skill, skill
     assert "finalize_outbound_handoff.py" in skill, skill
     assert "record_inbound_handoff.py" in skill, skill
@@ -849,6 +868,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "## Live Drill Gate" in codex_thread, codex_thread
     assert "plan_codex_thread_drill.py" in codex_thread, codex_thread
     assert "blocked_without_approval" in codex_thread, codex_thread
+    assert "codex_project_match" in codex_thread, codex_thread
+    assert "--codex-project" in codex_thread, codex_thread
     assert "ready_for_live_drill=true" in codex_thread, codex_thread
     assert "Allowed preflight actions" in codex_thread, codex_thread
     assert "Forbidden in preflight" in codex_thread, codex_thread

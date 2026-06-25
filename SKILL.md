@@ -79,6 +79,8 @@ For a Codex App live-message drill plan that must not create threads or send mes
 python3 <skill-dir>/scripts/plan_codex_thread_drill.py --repo <repo-root> --print-json
 ```
 
+After `list_projects`, rerun it with repeated `--codex-project "<projectId>=<path>"` entries so the plan can prove whether the Codex App project target exactly matches the repo.
+
 ## Initialize Team Once
 
 1. Read the nearest project `AGENTS.md` and project instructions.

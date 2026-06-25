@@ -70,7 +70,7 @@ End preflight with a readiness summary: project match, available thread tools, k
 
 Use `scripts/plan_codex_thread_drill.py --repo <repo-root> --print-json` when asked to prove the Codex App role-to-role loop but the user has not explicitly approved live thread creation or message sends.
 
-The plan is intentionally non-destructive. It may include `tool_search`, `list_projects`, exact `list_threads`, `inspect_project.py`, and `inspect_team.py` as safe preflight steps. It must list `create_thread`, `send_message_to_thread`, and normal `read_thread` usage under `blocked_without_approval` until there is an explicit live-drill or team-initialization request.
+The plan is intentionally non-destructive. It may include `tool_search`, `list_projects`, exact `list_threads`, `inspect_project.py`, and `inspect_team.py` as safe preflight steps. After `list_projects`, pass each relevant candidate back into the plan as `--codex-project "<projectId>=<path>"`; use `codex_project_match` as the evidence for whether the Codex App project target exactly matches the repo. It must list `create_thread`, `send_message_to_thread`, and normal `read_thread` usage under `blocked_without_approval` until there is an explicit live-drill or team-initialization request.
 
 Treat `ready_for_live_drill=true` as readiness only, not consent. After approval, the drill should prove:
 
@@ -81,6 +81,8 @@ Treat `ready_for_live_drill=true` as readiness only, not consent. After approval
 5. Manager records received payloads from direct messages and does not use Manager polling as the normal transport.
 
 If the plan reports pending outbound sends or an unsent reviewer fix, resolve those first. A live drill must not create duplicate handoffs while the ledger already has an unfinished send.
+
+If `codex_project_match.checked=true` and `matched=false`, stop before thread creation and add/open the correct Codex App project. Do not create long-lived D1/R1 threads under a different project target.
 
 ## Project Selection
 
