@@ -3,6 +3,7 @@
 ## Table Of Contents
 
 - Core invariant
+- Live drill authorization
 - Team lifecycle
 - Run directory
 - State machine
@@ -25,6 +26,18 @@ Manager owns both ledgers. Developer and Reviewer do not edit them directly.
 The team roster is the source of truth for thread ids and callbacks. Every role must know the same roster before handoffs begin.
 
 The executable contract for run statuses, status transitions, and required handoff routes lives in `scripts/start_work_contract.py`. Update that module and the smoke tests together when the protocol changes.
+
+## Live Drill Authorization
+
+Live-thread drills must have explicit user authorization in the current task context before any thread creation or live send.
+
+The authorization is model-side and non-invasive:
+
+- `plan_codex_thread_drill.py` must be run with `--live-approval-evidence` when readiness is otherwise met.
+- `approval_gate.approved` must be `true` and `live_drill_authorized` must be `true` before any real `create_thread` / `send_message_to_thread` workflow proceeds.
+- If approval is not present, the plan must return `recommended_next_actions` that explicitly request explicit authorization and rerun with evidence.
+
+This gate is in addition to local readiness checks (`ready_for_live_drill`) and does not replace project match, roster/acknowledgement, or pending-outbound resolution requirements.
 
 Use `scripts/inspect_project.py --repo <repo-root> --print-json` for a project-level resume snapshot. It combines team readiness and recent run summaries without loading the full ledgers. Its JSON `next_actions` field is the preferred LLM-readable resume path.
 

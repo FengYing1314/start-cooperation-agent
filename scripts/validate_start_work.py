@@ -41,6 +41,17 @@ def is_git_worktree() -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--quick",
+        action="store_true",
+        help="Run a fast validation subset suitable for iterative development.",
+    )
+    mode.add_argument(
+        "--fast",
+        action="store_true",
+        help="Run the minimal validation subset for fastest iteration.",
+    )
     parser.add_argument(
         "--skip-git-diff-check",
         action="store_true",
@@ -49,7 +60,12 @@ def main() -> int:
     args = parser.parse_args()
 
     run_step("compile scripts", [sys.executable, "-m", "py_compile", *python_scripts()])
-    run_step("smoke tests", [sys.executable, rel(SCRIPT_DIR / "test_start_work.py")])
+    test_command = [sys.executable, rel(SCRIPT_DIR / "test_start_work.py")]
+    if args.quick:
+        test_command.append("--quick")
+    elif args.fast:
+        test_command.append("--fast")
+    run_step("smoke tests", test_command)
 
     if args.skip_git_diff_check:
         print("== git diff checks skipped")

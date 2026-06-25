@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
@@ -2752,8 +2753,55 @@ def test_protocol_status_docs_match_contract(root: Path) -> None:
         assert status in protocol, status
 
 
+FAST_TESTS = [
+    test_team_id_is_stable,
+    test_team_inspection_requires_acknowledgements,
+    test_codex_thread_drill_plan_preserves_live_approval_gate,
+    test_project_inspection_guides_preflight_without_team,
+    test_direct_thread_happy_path,
+    test_handoff_payload_validation,
+    test_record_inbound_handoff_records_received_payloads,
+    test_protocol_status_docs_match_contract,
+]
+
+
+QUICK_TESTS = [
+    test_team_id_is_stable,
+    test_team_inspection_requires_acknowledgements,
+    test_team_inspection_rejects_broken_handoff_route,
+    test_project_inspection_guides_preflight_without_team,
+    test_codex_thread_drill_plan_preserves_live_approval_gate,
+    test_codex_project_match_accepts_wsl_and_mount_equivalent_paths,
+    test_project_inspection_summarizes_team_and_recent_runs,
+    test_callback_only_rejected_for_direct_thread_mode,
+    test_direct_thread_happy_path,
+    test_full_fix_review_cycle_status_path,
+    test_subagent_fallback_without_team,
+    test_fallback_mode_requires_reason,
+    test_reference_routing_is_progressive,
+    test_handoff_payload_validation,
+    test_prepare_outbound_handoff_records_and_routes,
+    test_record_inbound_handoff_records_received_payloads,
+    test_protocol_status_docs_match_contract,
+]
+
+
 def main() -> int:
-    tests = [
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--fast",
+        action="store_true",
+        help="Run a minimal fast subset for rapid iteration.",
+    )
+    mode.add_argument(
+        "--quick",
+        action="store_true",
+        help="Run a fast subset of tests for iterative development.",
+    )
+    args = parser.parse_args()
+
+    full_tests = [
         test_team_id_is_stable,
         test_team_inspection_requires_acknowledgements,
         test_team_inspection_rejects_broken_handoff_route,
@@ -2780,6 +2828,13 @@ def main() -> int:
         test_shared_contract_matches_generated_routes,
         test_protocol_status_docs_match_contract,
     ]
+
+    if args.fast:
+        tests = FAST_TESTS
+    elif args.quick:
+        tests = QUICK_TESTS
+    else:
+        tests = full_tests
     with tempfile.TemporaryDirectory(prefix="start-work-tests-") as temp:
         root = Path(temp)
         for test in tests:
