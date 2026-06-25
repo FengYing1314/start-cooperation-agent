@@ -135,6 +135,36 @@ def reviewer_fix_after_send_commands(run_dir: Path, d1_thread_id: str) -> list[l
     return commands
 
 
+def reviewer_fix_send_failed_command(run_dir: Path, event_id: str, d1_thread_id: str, payload_file: str) -> list[str]:
+    body = "\n".join(
+        [
+            f"Reviewer fix event: {event_id}",
+            f"Target: D1 {d1_thread_id}",
+            f"Payload file: {payload_file}",
+            "Send error: <send error>",
+        ]
+    )
+    return [
+        sys.executable,
+        str(APPEND_EVENT),
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        "blocker",
+        "--actor",
+        "M",
+        "--to",
+        "D1",
+        "--thread-id",
+        d1_thread_id,
+        "--summary",
+        "reviewer fix send failed",
+        "--body",
+        body,
+        "--print-json",
+    ]
+
+
 def latest_reviewer_fix_send_state(
     run_dir: Path,
     events: list[dict[str, object]],
@@ -187,6 +217,14 @@ def latest_reviewer_fix_send_state(
                     "payload_file": payload_file,
                     "send_message_to_thread": send_message_prompt(d1_thread_id, payload_file),
                     "after_send_status_commands": reviewer_fix_after_send_commands(run_dir, d1_thread_id)
+                    if d1_thread_id
+                    else [],
+                    "after_send_failed_command": reviewer_fix_send_failed_command(
+                        run_dir,
+                        event_id,
+                        d1_thread_id,
+                        payload_file,
+                    )
                     if d1_thread_id
                     else [],
                 }
@@ -358,6 +396,7 @@ def next_actions(
                     "Read reviewer_fix_send_state.payload_file and send its exact contents to D1 with send_message_to_thread.",
                     "Do not send only the payload file path.",
                     "After the real D1 send succeeds, run reviewer_fix_send_state.after_send_status_commands in order.",
+                    "If send_message_to_thread fails, replace <send error> in reviewer_fix_send_state.after_send_failed_command with the concrete error and run it without advancing the run status.",
                 ]
             if sent_word == "yes":
                 return [

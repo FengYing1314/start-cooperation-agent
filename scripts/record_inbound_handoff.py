@@ -134,6 +134,36 @@ def send_message_prompt(thread_id: str, payload_file: str) -> dict[str, str]:
     }
 
 
+def reviewer_fix_send_failed_command(run_dir: Path, event_id: str, thread_id: str, payload_file: str) -> list[str]:
+    body = "\n".join(
+        [
+            f"Reviewer fix event: {event_id}",
+            f"Target: D1 {thread_id}",
+            f"Payload file: {payload_file}",
+            "Send error: <send error>",
+        ]
+    )
+    return [
+        sys.executable,
+        str(APPEND_EVENT),
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        "blocker",
+        "--actor",
+        "M",
+        "--to",
+        "D1",
+        "--thread-id",
+        thread_id,
+        "--summary",
+        "reviewer fix send failed",
+        "--body",
+        body,
+        "--print-json",
+    ]
+
+
 def followup_status_items(spec: dict[str, Any]) -> list[dict[str, str]]:
     items = spec.get("followup_statuses", [])
     if isinstance(items, list) and items:
@@ -271,12 +301,19 @@ def record(args: argparse.Namespace) -> dict[str, Any]:
             "payload_file": payload_file,
             "send_message_to_thread": send_message_prompt(target_thread_id, payload_file),
             "after_send_status_commands": deferred_followups,
+            "after_send_failed_command": reviewer_fix_send_failed_command(
+                run_dir,
+                str(event.get("id", "")),
+                target_thread_id,
+                payload_file,
+            ),
         }
         followups = []
         next_actions = [
             "Reviewer fix copy says Next handoff sent: no; read unsent_handoff.payload_file and send its exact contents to D1 with send_message_to_thread.",
             "Do not send only the payload file path.",
             "After the real D1 send succeeds, run unsent_handoff.after_send_status_commands in order.",
+            "If send_message_to_thread fails, replace <send error> in unsent_handoff.after_send_failed_command with the concrete error and run it without advancing the run status.",
         ]
     if not followups and run_status == "blocked":
         next_actions = ["Report the blocker and stop the loop until the blocking condition changes."]

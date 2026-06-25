@@ -89,7 +89,7 @@ def payload_directory(run_dir: Path, kind: str, requested: str) -> Path | None:
         return run_dir / "artifacts"
     if kind == "message":
         return run_dir / "messages"
-    if kind in {"artifact", "review", "validation"}:
+    if kind in {"artifact", "blocker", "review", "validation"}:
         return run_dir / "artifacts"
     return None
 
