@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path, PurePosixPath
 
 
@@ -2811,6 +2812,7 @@ def main() -> int:
         action="store_true",
         help="Run a broader fast subset for quick validation.",
     )
+    parser.add_argument("--profile", action="store_true", help="Print per-test runtime in seconds.")
     args = parser.parse_args()
 
     full_tests = [
@@ -2849,11 +2851,23 @@ def main() -> int:
         tests = QUICK_TESTS
     else:
         tests = full_tests
+    timings = []
     with tempfile.TemporaryDirectory(prefix="start-work-tests-") as temp:
         root = Path(temp)
         for test in tests:
+            start = time.perf_counter()
             test(root)
+            elapsed = time.perf_counter() - start
+            if args.profile:
+                print(f"TIME {elapsed:0.3f}s {test.__name__}")
+            timings.append((test.__name__, elapsed))
             print(f"PASS {test.__name__}")
+
+    if args.profile:
+        slowest = sorted(timings, key=lambda item: item[1], reverse=True)
+        print("SLOWEST TESTS")
+        for name, elapsed in slowest[:10]:
+            print(f"  {elapsed:0.3f}s  {name}")
     return 0
 
 

@@ -159,6 +159,7 @@ After editing scripts or handoff rules, run:
 python3 scripts/validate_start_work.py
 python3 scripts/validate_start_work.py --ultra-fast
 python3 scripts/validate_start_work.py --quick
+python3 scripts/test_start_work.py --ultra-fast --profile
 python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
 ```
 

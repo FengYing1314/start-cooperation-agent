@@ -249,6 +249,16 @@ Direct receive sequence:
 1. Receive the direct Codex App thread message from the roster target.
 2. Save or pass the exact payload to record_inbound_handoff.py.
 3. Follow the returned next_actions; only Manager-owned checkpoint or acceptance follow-up commands may advance beyond the receipt status.
+
+## Observability and Determinism
+
+The workflow is intentionally code-driven and testable at each edge:
+
+- Each handoff is recorded in an append-only event log (`events.jsonl`) with local message ids and optional payload references.
+- `run.json` is the machine-readable run index for quick status reconstruction and resume.
+- Evidence is explicit (`Evidence references:` plus `messages/` and `artifacts/`) so no handoff depends on thread context alone.
+- Use trigger eval scripts (`prepare_trigger_eval_workspace`, `check_trigger_eval_cli`, `run_trigger_eval_plan`, `score_trigger_evals`) to measure loop-level behavior and prevent regressions at handoff boundaries.
+- For timing diagnostics, run `python3 scripts/test_start_work.py --ultra-fast --profile` before `--quick` or full validation.
 ```
 
 ## Message Ids
