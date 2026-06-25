@@ -38,6 +38,14 @@ Prefer generated `team/*.md` and run ledger files over hand-writing payloads.
 
 When a script returns `next_commands` or `next_actions`, follow those structured hints instead of reconstructing equivalent commands from prose.
 
+Before sending a generated role handoff, validate the exact payload when practical:
+
+```bash
+python3 <skill-dir>/scripts/validate_handoff.py --kind <handoff-kind> --body-file <payload.md> --print-json
+```
+
+Kinds: `work_order`, `developer_completion`, `review_request`, `reviewer_fix`, `developer_fix_completion`, `reviewer_accepted`.
+
 For a project-level resume or audit snapshot, inspect structured state first:
 
 ```bash
@@ -94,9 +102,9 @@ python3 <skill-dir>/scripts/inspect_run.py --run-dir <run-dir> --print-json
 ```
 
 3. Manager writes the work order with goal, non-goals, ownership, acceptance criteria, and checks.
-4. In direct `codex-thread` mode, Manager records the outbound work order in the run ledger, sends it directly to Developer with `send_message_to_thread`, then records `developer_running` after the send succeeds.
+4. In direct `codex-thread` mode, Manager records and validates the outbound work order in the run ledger, sends it directly to Developer with `send_message_to_thread`, then records `developer_running` after the send succeeds.
 5. Developer implements and returns the completion handoff through the roster target: direct message to Manager in direct mode, or exact payload plus target for callback/manual relay or fallback mode.
-6. Manager performs the integration checkpoint: inspect diff, run or record checks, then records and sends the review-ready package directly to Reviewer in direct mode, then records `reviewer_running` after the send succeeds.
+6. Manager performs the integration checkpoint: inspect diff, run or record checks, then records, validates, and sends the review-ready package directly to Reviewer in direct mode, then records `reviewer_running` after the send succeeds.
 7. Reviewer either accepts through the roster target, or sends blocking fix handoffs directly to Developer with a separate Manager copy or payload for relay when needed.
 8. Developer fixes and returns the fix completion through the roster target. Repeat until accepted, blocked, or stopped by the user.
 9. Final response includes changes, checks, Reviewer result, risks, and the run ledger path.
@@ -124,4 +132,4 @@ For trigger behavior forward-tests, load `references/trigger-eval-prompts.md`, p
 
 `validate_start_work.py` compiles every local Python script, including `start_work_contract.py`, runs the smoke tests, and checks git whitespace/conflict markers when the skill is inside a git worktree.
 
-These checks cover stable team ids, team next-step hints, team readiness inspection, handoff route invariants, project status inspection, project/run resume next-step hints, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, run next-step hints, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, trigger-eval prompt coverage, CLI launch checks, fixture preparation and artifact cleanup, trigger-eval step hints, dry-run planning, plan execution, UTF-8-safe runner failure artifacts, trace scoring, contract/documentation drift, progressive reference routing, and skill metadata validity.
+These checks cover stable team ids, team next-step hints, team readiness inspection, handoff route invariants, handoff payload validation, project status inspection, project/run resume next-step hints, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, run next-step hints, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, trigger-eval prompt coverage, CLI launch checks, fixture preparation and artifact cleanup, trigger-eval step hints, dry-run planning, plan execution, UTF-8-safe runner failure artifacts, trace scoring, contract/documentation drift, progressive reference routing, and skill metadata validity.

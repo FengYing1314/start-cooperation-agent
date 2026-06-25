@@ -21,6 +21,7 @@ INSPECT_RUN = SCRIPT_DIR / "inspect_run.py"
 INSPECT_PROJECT = SCRIPT_DIR / "inspect_project.py"
 START_WORK_CONTRACT = SCRIPT_DIR / "start_work_contract.py"
 VALIDATE_START_WORK = SCRIPT_DIR / "validate_start_work.py"
+VALIDATE_HANDOFF = SCRIPT_DIR / "validate_handoff.py"
 CHECK_TRIGGER_EVAL_CLI = SCRIPT_DIR / "check_trigger_eval_cli.py"
 PLAN_TRIGGER_EVALS = SCRIPT_DIR / "plan_trigger_evals.py"
 SCORE_TRIGGER_EVALS = SCRIPT_DIR / "score_trigger_evals.py"
@@ -709,6 +710,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "inspect_team.py" in skill, skill
     assert "inspect_run.py" in skill, skill
     assert "inspect_project.py" in skill, skill
+    assert "validate_handoff.py" in skill, skill
+    assert "reviewer_accepted" in skill, skill
     assert "check_trigger_eval_cli.py" in skill, skill
     assert "run_trigger_eval_plan.py" in skill, skill
     assert "start_work_contract.py" in skill, skill
@@ -752,6 +755,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
 
     protocol = (SKILL_ROOT / "references" / "protocol.md").read_text(encoding="utf-8")
     assert "scripts/start_work_contract.py" in protocol, protocol
+    assert "validate_handoff.py" in protocol, protocol
     assert "## Mode-Specific Transport" in protocol, protocol
     assert "Direct codex-thread route" in protocol, protocol
     assert "do not claim that a thread message was sent unless one really was" in protocol, protocol
@@ -772,6 +776,98 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "roster-routed" in openai_yaml, openai_yaml
     assert "callback/manual relay fallback" in openai_yaml, openai_yaml
     assert "direct-message development team" not in openai_yaml, openai_yaml
+
+
+def test_handoff_payload_validation(root: Path) -> None:
+    assert VALIDATE_HANDOFF.exists(), VALIDATE_HANDOFF
+    good_payload = root / "good-work-order.md"
+    good_payload.write_text(
+        """Start-work work order M-001
+Run ID: 20260101-000001-test
+Team ID: team-001
+From: M
+To: D1
+Manager Thread: manager-thread
+Developer Thread: dev-thread
+Reviewer Thread: review-thread
+Project Path: C:/repo
+
+User goal:
+Fix the parser error.
+
+Ownership:
+src/parser.py
+
+Acceptance criteria:
+Parser handles blank input.
+
+Required checks:
+python -m pytest tests/test_parser.py
+
+Developer response format:
+Status: complete | blocked
+Changed files:
+Checks run:
+Next handoff sent:
+""",
+        encoding="utf-8",
+    )
+    good = json.loads(
+        script(
+            VALIDATE_HANDOFF,
+            "--kind",
+            "work_order",
+            "--body-file",
+            str(good_payload),
+            "--print-json",
+        ).stdout
+    )
+    assert good["ok"] is True, good
+    assert any("Send the validated work order" in item for item in good["next_actions"]), good
+
+    bad_payload = root / "bad-work-order.md"
+    bad_payload.write_text(
+        """Start-work work order M-001
+Run ID: <run-id>
+Team ID: team-001
+From: D1
+To: R1
+Manager Thread: manager-thread
+Developer Thread: dev-thread
+Reviewer Thread: review-thread
+
+User goal:
+Fix the parser error.
+
+Ownership:
+Acceptance criteria:
+Parser handles blank input.
+
+Required checks:
+python -m pytest tests/test_parser.py
+
+Developer response format:
+Status: complete | blocked
+""",
+        encoding="utf-8",
+    )
+    bad_proc = script(
+        VALIDATE_HANDOFF,
+        "--kind",
+        "work_order",
+        "--body-file",
+        str(bad_payload),
+        "--print-json",
+        check=False,
+    )
+    assert bad_proc.returncode != 0, bad_proc.stdout
+    bad = json.loads(bad_proc.stdout)
+    assert bad["ok"] is False, bad
+    assert any("Missing required label: Project Path" in problem for problem in bad["problems"]), bad
+    assert any("Unresolved placeholder in Run ID" in problem for problem in bad["problems"]), bad
+    assert any("Unexpected From" in problem for problem in bad["problems"]), bad
+    assert any("Unexpected To" in problem for problem in bad["problems"]), bad
+    assert any("Required label is empty: Ownership" in problem for problem in bad["problems"]), bad
 
     codex_thread = (SKILL_ROOT / "references" / "codex-thread-mode.md").read_text(encoding="utf-8")
     assert "do not infer or guess" in codex_thread, codex_thread
@@ -1304,6 +1400,7 @@ def main() -> int:
         test_subagent_fallback_without_team,
         test_fallback_mode_requires_reason,
         test_reference_routing_is_progressive,
+        test_handoff_payload_validation,
         test_trigger_eval_prompts_are_balanced,
         test_trigger_eval_cli_check_reports_launchability,
         test_trigger_eval_plan_is_stable,

@@ -84,6 +84,8 @@ Use `scripts/init_run.py` to create a run. In `codex-thread` mode it must read `
 
 The JSON result includes `next_commands` and `next_actions`; use them to inspect the run, record the work-order payload, and only advance to a direct-send running status after a real thread message succeeds.
 
+Use `scripts/validate_handoff.py --kind <handoff-kind> --body-file <payload.md> --print-json` before sending generated work orders, review requests, fix requests, completions, or acceptance payloads when practical. It checks required labels, role direction, allowed status values, unresolved placeholders, and returns LLM-readable `next_actions`.
+
 `run.json` is the machine-readable run index. It must include `current_status`, status update metadata, last event metadata, mode, team roster snapshot, and paths to the ledger files so a later agent can resume without parsing prose first.
 
 Use `scripts/inspect_run.py --run-dir <run-dir> --print-json` before resuming or auditing a run. It reports `ok`, current status, next allowed statuses, last event, ledger consistency problems, and LLM-readable `next_actions`.
@@ -178,10 +180,11 @@ Direct send sequence:
 
 ```text
 1. Compose the handoff payload from the matching template.
-2. Record the outbound payload with append_event.py, or record the received handoff as soon as it arrives.
-3. Send the same payload to the roster target with send_message_to_thread.
-4. If sending succeeds, append the next running status: `developer_running`, `reviewer_running`, or `developer_fix_running`.
-5. If sending fails, record a blocker event with the unsent target and payload location and do not advance the run status.
+2. Validate the exact payload with validate_handoff.py when practical.
+3. Record the outbound payload with append_event.py, or record the received handoff as soon as it arrives.
+4. Send the same payload to the roster target with send_message_to_thread.
+5. If sending succeeds, append the next running status: `developer_running`, `reviewer_running`, or `developer_fix_running`.
+6. If sending fails, record a blocker event with the unsent target and payload location and do not advance the run status.
 ```
 
 ## Message Ids
