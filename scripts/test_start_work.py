@@ -751,6 +751,15 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     for name in ("templates-work-order.md", "templates-review.md", "templates-final.md"):
         assert (SKILL_ROOT / "references" / name).exists(), name
 
+    codex_thread = (SKILL_ROOT / "references" / "codex-thread-mode.md").read_text(encoding="utf-8")
+    assert "send_message_to_thread" in codex_thread, codex_thread
+    assert "prepare_outbound_handoff.py" in codex_thread, codex_thread
+    assert "finalize_outbound_handoff.py" in codex_thread, codex_thread
+    assert "pending_outbound" in codex_thread, codex_thread
+    assert "record_inbound_handoff.py --kind reviewer_fix" in codex_thread, codex_thread
+    assert "transport layer" in codex_thread, codex_thread
+    assert "scripts/append_event.py --kind message --actor M" not in codex_thread, codex_thread
+
     for path in (SKILL_ROOT / "references").glob("*.md"):
         text = path.read_text(encoding="utf-8")
         if len(text.splitlines()) > 100:

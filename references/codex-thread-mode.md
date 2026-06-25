@@ -26,6 +26,7 @@ Expected capabilities include:
 - `list_projects`
 - `create_thread`
 - `send_message_to_thread`
+- `list_threads`
 - `read_thread`
 - `set_thread_title`
 - `set_thread_archived`
@@ -85,17 +86,22 @@ For each task, Manager creates a new run ledger with `scripts/init_run.py`. The 
 
 Normal transport is direct thread messaging, not Manager reading other agent threads. The sender must send the next handoff to the roster target with `send_message_to_thread`. If Manager must be copied, send a separate message to Manager. If the messaging tool is unavailable, the sender stops and returns the exact unsent payload and target.
 
-Manager outbound prompts should be saved in the run `messages/` directory and recorded in the ledger before or immediately after sending. Developer and Reviewer must not edit Manager-owned ledgers; they include enough message metadata for Manager to record the received handoff.
+Treat thread messages as the transport layer and the run ledger as the recovery layer. Important payloads must be persisted under the run `messages/` directory so a later Manager can resume without relying on another thread's visible history.
+
+Manager outbound prompts should be prepared with `scripts/prepare_outbound_handoff.py`, sent with `send_message_to_thread`, then finalized with `scripts/finalize_outbound_handoff.py`. Developer and Reviewer must not edit Manager-owned ledgers; they include enough message metadata for Manager to record the received handoff with `scripts/record_inbound_handoff.py`.
 
 Manager send sequence:
 
 ```text
 1. Write the exact outbound payload from `references/templates-work-order.md` for Developer work or `references/templates-review.md` for Reviewer work.
-2. Record it with `scripts/append_event.py --kind message --actor M --to <role> --body-file <payload>`.
-3. Call `send_message_to_thread` with the recipient thread id from `team.json` and the same payload.
-4. If the send succeeds, record the next running status with `scripts/append_event.py --kind status --run-status developer_running` for Developer work, or `--run-status reviewer_running` for Reviewer work.
-5. If the send fails, record a blocker event and do not advance to the next run status.
+2. Run `scripts/prepare_outbound_handoff.py --kind work_order` or `--kind review_request` with that payload.
+3. If resuming and `inspect_run.py` reports `pending_outbound`, reuse that payload instead of preparing a duplicate.
+4. Call `send_message_to_thread` with the returned `send_to_thread_id` and `payload_file`.
+5. If the send succeeds, run the returned `finalize_sent_command`.
+6. If the send fails, run the returned `finalize_failed_command` with the concrete send error; do not advance to the next run status.
 ```
+
+Reviewer fix handoffs are Reviewer-originated. Reviewer sends the fix payload directly to D1 and sends Manager a separate copy. Manager records that copy with `scripts/record_inbound_handoff.py --kind reviewer_fix`, then follows the returned status commands in order only after the copy proves the D1 handoff happened.
 
 Message payloads must include:
 
