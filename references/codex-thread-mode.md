@@ -72,7 +72,7 @@ Use `scripts/plan_codex_thread_drill.py --repo <repo-root> --print-json` when as
 
 The plan is intentionally non-destructive. It may include `tool_search`, `list_projects`, exact `list_threads`, `inspect_project.py`, and `inspect_team.py` as safe preflight steps. After `list_projects`, pass each relevant candidate back into the plan as `--codex-project "<projectId>=<path>"`; use `codex_project_match` as the evidence for whether the Codex App project target exactly matches the repo. The match normalizes common WSL UNC paths such as `\\wsl.localhost\<distro>\home\...` against native Linux paths such as `/home/...`. It must list `create_thread`, `send_message_to_thread`, and normal `read_thread` usage under `blocked_without_approval` until there is an explicit live-drill or team-initialization request.
 
-Treat `ledger_ready_for_live_drill=true` as local roster/run readiness only. Treat `ready_for_live_drill=true` as local readiness plus exact Codex App project match, not consent. After approval, the drill should prove:
+Treat `ledger_ready_for_live_drill=true` as local roster/run readiness only. Treat `ready_for_live_drill=true` as local readiness plus exact Codex App project match, not consent. After the user approves live thread creation or live message sends in the current task context, rerun the plan with `--live-approval-evidence "<approval summary or message id>"` and require `approval_gate.approved=true` and `live_drill_authorized=true` before live actions. After authorization, the drill should prove:
 
 1. Manager sends an exact prepared work-order payload to D1.
 2. D1 sends `developer_completion` directly to Manager.
@@ -84,7 +84,7 @@ If the plan reports pending outbound sends or an unsent reviewer fix, resolve th
 
 If `codex_project_match.checked=true` and `matched=false`, stop before thread creation and add/open the correct Codex App project. Do not create long-lived D1/R1 threads under a different project target.
 
-Before claiming the live drill passed, check the plan's `live_drill_success_criteria` and `completion_evidence_contract`. The completion evidence must include the matched project target, ready acknowledged roster, Manager outbound send finalization for work and review, inbound Developer/Reviewer handoff recording, and confirmation that Manager did not use polling as normal transport.
+Before claiming the live drill passed, check the plan's `live_drill_success_criteria` and `completion_evidence_contract`. The completion evidence must include the matched project target, approval gate evidence, ready acknowledged roster, Manager outbound send finalization for work and review, inbound Developer/Reviewer handoff recording, and confirmation that Manager did not use polling as normal transport.
 
 ## Project Selection
 

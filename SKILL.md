@@ -81,7 +81,7 @@ python3 <skill-dir>/scripts/plan_codex_thread_drill.py --repo <repo-root> --prin
 
 After `list_projects`, rerun it with repeated `--codex-project "<projectId>=<path>"` entries so the plan can prove whether the Codex App project target exactly matches the repo.
 The project match normalizes common WSL UNC and native Linux path forms before comparing.
-Treat `ledger_ready_for_live_drill=true` as local roster/run readiness only; require `ready_for_live_drill=true` plus explicit user approval before creating or sending live Codex App role-thread messages.
+Treat `ledger_ready_for_live_drill=true` as local roster/run readiness only, and `ready_for_live_drill=true` as local readiness plus project match only. Require `live_drill_authorized=true` before creating or sending live Codex App role-thread messages; set it only by rerunning the plan with `--live-approval-evidence` after current-context user approval.
 Use the plan's `live_drill_success_criteria` and `completion_evidence_contract` before claiming a live drill passed.
 
 ## Initialize Team Once

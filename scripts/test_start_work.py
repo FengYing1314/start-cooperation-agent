@@ -258,7 +258,11 @@ def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> Non
     unready = json.loads(plan_codex_thread_drill(repo).stdout)
     assert unready["ok"] is True, unready
     assert unready["ready_for_live_drill"] is False, unready
+    assert unready["live_drill_authorized"] is False, unready
     assert unready["requires_explicit_live_drill_approval"] is True, unready
+    assert unready["approval_gate"]["required_for_live_drill"] is True, unready
+    assert unready["approval_gate"]["approved"] is False, unready
+    assert unready["approval_gate"]["live_actions_remain_blocked"] is True, unready
     assert unready["can_run_non_destructive_preflight_now"] is True, unready
     assert unready["codex_project_match"]["required_for_live_drill"] is True, unready
     assert unready["codex_project_match"]["checked"] is False, unready
@@ -279,6 +283,7 @@ def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> Non
     evidence_keys = {item["evidence"] for item in unready["completion_evidence_contract"]}
     assert {
         "codex_project_match",
+        "approval_gate",
         "team_readiness",
         "manager_send_events",
         "inbound_handoffs",
@@ -333,11 +338,32 @@ def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> Non
     assert matched["codex_project_match"]["matches"][0]["project_id"] == "project-1", matched
     assert matched["ledger_ready_for_live_drill"] is True, matched
     assert matched["ready_for_live_drill"] is True, matched
+    assert matched["live_drill_authorized"] is False, matched
+    assert matched["approval_gate"]["approved"] is False, matched
+    assert any("live_drill_authorized=true" in item for item in matched["recommended_next_actions"]), matched
+
+    authorized = json.loads(
+        plan_codex_thread_drill(
+            repo,
+            "--codex-project",
+            f"project-1={repo}",
+            "--live-approval-evidence",
+            "user approved live D1/R1 thread drill in this turn",
+        ).stdout
+    )
+    assert authorized["ready_for_live_drill"] is True, authorized
+    assert authorized["live_drill_authorized"] is True, authorized
+    assert authorized["approval_gate"]["approved"] is True, authorized
+    assert authorized["approval_gate"]["live_actions_remain_blocked"] is False, authorized
+    assert "user approved live D1/R1 thread drill" in authorized["approval_gate"]["evidence"], authorized
+    assert any("Live drill gates are satisfied" in item for item in authorized["recommended_next_actions"]), authorized
 
     text_result = script(PLAN_CODEX_THREAD_DRILL, "--repo", str(repo))
     assert "Ledger Ready For Live Drill: true" in text_result.stdout, text_result.stdout
     assert "Ready For Live Drill: false" in text_result.stdout, text_result.stdout
+    assert "Live Drill Authorized: false" in text_result.stdout, text_result.stdout
     assert "Requires Explicit Live Drill Approval: true" in text_result.stdout, text_result.stdout
+    assert "Approval Gate Approved: false" in text_result.stdout, text_result.stdout
     assert "Codex Project Match Checked: false" in text_result.stdout, text_result.stdout
 
 
@@ -885,6 +911,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "plan_codex_thread_drill.py" in skill, skill
     assert "--codex-project" in skill, skill
     assert "ledger_ready_for_live_drill" in skill, skill
+    assert "live_drill_authorized" in skill, skill
+    assert "--live-approval-evidence" in skill, skill
     assert "WSL UNC and native Linux path forms" in skill, skill
     assert "live_drill_success_criteria" in skill, skill
     assert "completion_evidence_contract" in skill, skill
@@ -953,6 +981,9 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "codex_project_match" in codex_thread, codex_thread
     assert "--codex-project" in codex_thread, codex_thread
     assert "ledger_ready_for_live_drill" in codex_thread, codex_thread
+    assert "approval_gate.approved=true" in codex_thread, codex_thread
+    assert "live_drill_authorized=true" in codex_thread, codex_thread
+    assert "--live-approval-evidence" in codex_thread, codex_thread
     assert "WSL UNC paths" in codex_thread, codex_thread
     assert "ready_for_live_drill=true" in codex_thread, codex_thread
     assert "live_drill_success_criteria" in codex_thread, codex_thread

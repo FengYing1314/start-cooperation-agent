@@ -77,6 +77,17 @@ def codex_project_match(repo: Path, codex_projects: list[dict[str, str]]) -> dic
     }
 
 
+def approval_gate(live_approval_evidence: str) -> dict[str, object]:
+    evidence = live_approval_evidence.strip()
+    return {
+        "required_for_live_drill": True,
+        "approved": bool(evidence),
+        "source": "--live-approval-evidence",
+        "evidence": evidence,
+        "live_actions_remain_blocked": not bool(evidence),
+    }
+
+
 def count_pending(latest_runs: object) -> tuple[int, int]:
     if not isinstance(latest_runs, list):
         return 0, 0
@@ -291,6 +302,11 @@ def completion_evidence_contract(repo: Path) -> list[dict[str, object]]:
             "must_show": ["checked=true", "matched=true", f"repo={repo}"],
         },
         {
+            "evidence": "approval_gate",
+            "source": "plan_codex_thread_drill.py output after passing current-turn approval summary with --live-approval-evidence.",
+            "must_show": ["approved=true", "explicit current-context approval evidence"],
+        },
+        {
             "evidence": "team_readiness",
             "source": "inspect_team.py --repo <repo-root> --print-json",
             "must_show": ["codex_thread_ready=true", "acknowledgements_complete=true", "handoff_route_valid=true"],
@@ -317,6 +333,7 @@ def recommended_next_actions(
     *,
     team: dict[str, Any],
     project_match: dict[str, object],
+    approval: dict[str, object],
     pending_outbound_count: int,
     reviewer_fix_needs_send_count: int,
 ) -> list[str]:
@@ -345,6 +362,18 @@ def recommended_next_actions(
             "Use callback/manual relay only if the user chooses fallback instead of direct role-to-role messaging.",
         ]
     if team.get("codex_thread_ready"):
+        if project_match.get("checked") and project_match.get("matched") and not approval.get("approved"):
+            return [
+                "Record explicit current-context live-drill approval before creating role threads or sending live role-thread messages.",
+                "Rerun this script with --live-approval-evidence <approval summary or message id> after the user approves the live drill.",
+                "Only follow live_drill_when_approved after live_drill_authorized=true.",
+            ]
+        if project_match.get("checked") and project_match.get("matched") and approval.get("approved"):
+            return [
+                "Live drill gates are satisfied; follow live_drill_when_approved in order.",
+                "Create or confirm long-lived D1/R1 threads only under the matched Codex App project target.",
+                "Record Manager send finalization and inbound Developer/Reviewer handoff evidence before claiming success.",
+            ]
         return [
             "Confirm the exact Codex App project target with list_projects and rerun this script with --codex-project <projectId=path>.",
             "Ask the user for explicit live-drill approval only after codex_project_match.matched=true.",
@@ -353,10 +382,11 @@ def recommended_next_actions(
     return ["Inspect team readiness again before attempting a live drill."]
 
 
-def build_plan(repo: Path, limit: int, codex_projects: list[dict[str, str]]) -> dict[str, object]:
+def build_plan(repo: Path, limit: int, codex_projects: list[dict[str, str]], live_approval_evidence: str) -> dict[str, object]:
     project = inspect_project(repo, limit)
     team = inspect_team(repo)
     project_match = codex_project_match(repo, codex_projects)
+    approval = approval_gate(live_approval_evidence)
     pending_outbound_count, reviewer_fix_needs_send_count = count_pending(project.get("latest_runs"))
     ledger_ready_for_live_drill = bool(
         team.get("codex_thread_ready")
@@ -369,12 +399,15 @@ def build_plan(repo: Path, limit: int, codex_projects: list[dict[str, str]]) -> 
         and project_match["checked"]
         and project_match["matched"]
     )
+    live_drill_authorized = bool(ready_for_live_drill and approval["approved"])
     return {
         "ok": True,
         "repo": str(repo),
         "ledger_ready_for_live_drill": ledger_ready_for_live_drill,
         "ready_for_live_drill": ready_for_live_drill,
+        "live_drill_authorized": live_drill_authorized,
         "requires_explicit_live_drill_approval": True,
+        "approval_gate": approval,
         "can_run_non_destructive_preflight_now": True,
         "codex_project_match": project_match,
         "current_state": {
@@ -396,6 +429,7 @@ def build_plan(repo: Path, limit: int, codex_projects: list[dict[str, str]]) -> 
         "recommended_next_actions": recommended_next_actions(
             team=team,
             project_match=project_match,
+            approval=approval,
             pending_outbound_count=pending_outbound_count,
             reviewer_fix_needs_send_count=reviewer_fix_needs_send_count,
         ),
@@ -409,7 +443,11 @@ def print_text(plan: dict[str, object]) -> None:
     print(f"Repo: {plan.get('repo', '')}")
     print(f"Ledger Ready For Live Drill: {str(plan.get('ledger_ready_for_live_drill', False)).lower()}")
     print(f"Ready For Live Drill: {str(plan.get('ready_for_live_drill', False)).lower()}")
+    print(f"Live Drill Authorized: {str(plan.get('live_drill_authorized', False)).lower()}")
     print(f"Requires Explicit Live Drill Approval: {str(plan.get('requires_explicit_live_drill_approval', True)).lower()}")
+    approval = plan.get("approval_gate", {})
+    if isinstance(approval, dict):
+        print(f"Approval Gate Approved: {str(approval.get('approved', False)).lower()}")
     if isinstance(project_match, dict):
         checked = str(project_match.get("checked", False)).lower()
         matched = str(project_match.get("matched", False)).lower()
@@ -436,13 +474,18 @@ def main() -> int:
         default=[],
         help="Codex App project entry from list_projects as <projectId=path>. Repeat for each candidate.",
     )
+    parser.add_argument(
+        "--live-approval-evidence",
+        default="",
+        help="Current-context user approval evidence for live thread creation or message sends. This only records the gate; it does not create or send anything.",
+    )
     parser.add_argument("--print-json", action="store_true", help="Print machine-readable plan.")
     args = parser.parse_args()
 
     if args.limit < 0:
         raise SystemExit("--limit must be 0 or greater.")
     repo, _ = resolve_repo(args.repo)
-    plan = build_plan(repo, args.limit, parse_codex_project_entries(args.codex_project))
+    plan = build_plan(repo, args.limit, parse_codex_project_entries(args.codex_project), args.live_approval_evidence)
     if args.print_json:
         print(json.dumps(plan, ensure_ascii=False, indent=2))
     else:
