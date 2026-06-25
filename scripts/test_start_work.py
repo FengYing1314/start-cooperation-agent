@@ -758,6 +758,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "next_commands" in skill, skill
     assert "next_actions" in skill, skill
     assert "pending_outbound" in skill, skill
+    assert "--send-evidence" in skill, skill
     assert "full fix-review loop progression" in skill, skill
     assert "non-destructive Codex App preflight" in skill, skill
     assert "read the returned `unsent_handoff.payload_file`" in skill, skill
@@ -791,6 +792,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "prompt=<exact contents of payload_file>" in codex_thread, codex_thread
     assert "prepare_outbound_handoff.py" in codex_thread, codex_thread
     assert "finalize_outbound_handoff.py" in codex_thread, codex_thread
+    assert "--send-evidence" in codex_thread, codex_thread
     assert "pending_outbound" in codex_thread, codex_thread
     assert "## Non-Destructive Preflight" in codex_thread, codex_thread
     assert "Allowed preflight actions" in codex_thread, codex_thread
@@ -846,6 +848,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "next_commands" in protocol, protocol
     assert "next_actions" in protocol, protocol
     assert "pending_outbound" in protocol, protocol
+    assert "--send-evidence" in protocol, protocol
     assert "When it starts with `no`" in protocol, protocol
     assert "use the returned `unsent_handoff`" in protocol, protocol
     assert "only then run `after_send_status_commands`" in protocol, protocol
@@ -1203,6 +1206,7 @@ Next handoff sent:
     assert "failed" in prepared["finalize_failed_command"], prepared
     assert any("send_message_to_thread" in item for item in prepared["next_actions"]), prepared
     assert any("Do not pass the payload_file path as the prompt" in item for item in prepared["next_actions"]), prepared
+    assert any("--send-evidence" in item for item in prepared["next_actions"]), prepared
     inspected = json.loads(inspect_run(run_dir).stdout)
     assert inspected["current_status"] == "manager_work_order", inspected
     assert inspected["event_count"] == 1, inspected
@@ -1219,6 +1223,7 @@ Next handoff sent:
     assert "failed" in pending["finalize_failed_command"], inspected
     assert any("Pending outbound work_order M-001" in item for item in inspected["next_actions"]), inspected
     assert any("Do not send only the payload_file path" in item for item in inspected["next_actions"]), inspected
+    assert any("--send-evidence" in item for item in inspected["next_actions"]), inspected
 
     finalized = json.loads(
         script(
@@ -1231,15 +1236,20 @@ Next handoff sent:
             "M-001",
             "--result",
             "sent",
+            "--send-evidence",
+            '{"threadId":"dev-thread","delivery":"accepted"}',
             "--print-json",
         ).stdout
     )
     assert finalized["ok"] is True, finalized
     assert finalized["send_result"] == "sent", finalized
     assert finalized["result_event"]["run_status"] == "developer_running", finalized
+    assert finalized["evidence_event"]["kind"] == "artifact", finalized
+    sent_evidence = (run_dir / finalized["evidence_event"]["file"]).read_text(encoding="utf-8")
+    assert '"delivery":"accepted"' in sent_evidence, finalized
     sent_inspected = json.loads(inspect_run(run_dir).stdout)
     assert sent_inspected["current_status"] == "developer_running", sent_inspected
-    assert sent_inspected["event_count"] == 2, sent_inspected
+    assert sent_inspected["event_count"] == 3, sent_inspected
     assert sent_inspected["pending_outbound"] is None, sent_inspected
 
     duplicate_finalize = script(

@@ -348,6 +348,7 @@ def next_actions(
             f"Use payload file contents as send_message_to_thread.prompt: {payload_file}",
             "Do not send only the payload_file path.",
             "After send_message_to_thread succeeds, run pending_outbound.finalize_sent_command.",
+            "If send_message_to_thread returns a receipt or useful result, include it with --send-evidence or --send-evidence-file when finalizing sent.",
             "If send_message_to_thread fails, run pending_outbound.finalize_failed_command with a concrete --error value.",
         ]
     if current_status == "init":

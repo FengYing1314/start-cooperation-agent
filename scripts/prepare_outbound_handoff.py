@@ -216,6 +216,7 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
         "next_actions": [
             spec["next_action"],
             "Do not pass the payload_file path as the prompt; pass the file contents.",
+            "If send_message_to_thread returns a receipt or useful result, pass it to finalize_sent_command with --send-evidence or --send-evidence-file.",
             "If send_message_to_thread fails, run finalize_failed_command and do not advance the run status.",
         ],
     }

@@ -127,7 +127,7 @@ Manager send sequence:
 2. Run `scripts/prepare_outbound_handoff.py --kind work_order` or `--kind review_request` with that payload.
 3. If resuming and `inspect_run.py` reports `pending_outbound`, reuse that payload instead of preparing a duplicate.
 4. Call `send_message_to_thread` with `threadId=<send_to_thread_id>` and `prompt=<exact contents of payload_file>`.
-5. If the send succeeds, run the returned `finalize_sent_command`.
+5. If the send succeeds, run the returned `finalize_sent_command`; include `--send-evidence` or `--send-evidence-file` when the thread tool returns a useful receipt or result.
 6. If the send fails, run the returned `finalize_failed_command` with the concrete send error; do not advance to the next run status.
 ```
 

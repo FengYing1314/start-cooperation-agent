@@ -54,6 +54,12 @@ def already_finalized(events: list[dict[str, Any]], start_index: int, spec: dict
     return False
 
 
+def read_send_evidence(args: argparse.Namespace) -> str:
+    if args.send_evidence_file:
+        return Path(args.send_evidence_file).expanduser().read_text(encoding="utf-8").strip()
+    return args.send_evidence.strip()
+
+
 def finalize(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir).expanduser().resolve()
     if not run_dir.is_dir():
@@ -69,6 +75,7 @@ def finalize(args: argparse.Namespace) -> dict[str, Any]:
         raise SystemExit(f"Outbound event already finalized as {spec['post_send_status']}: {outbound_event.get('id', '')}")
 
     if args.result == "sent":
+        send_evidence = read_send_evidence(args)
         result_event = append_event(
             [
                 "--run-dir",
@@ -88,8 +95,39 @@ def finalize(args: argparse.Namespace) -> dict[str, Any]:
                 "--print-json",
             ]
         )
+        evidence_event = {}
+        if send_evidence:
+            evidence_body = "\n".join(
+                [
+                    f"Outbound event: {outbound_event.get('id', '')}",
+                    f"Target: {spec['to']} {thread_id}",
+                    f"Payload file: {outbound_event.get('file', '')}",
+                    "Send evidence:",
+                    send_evidence,
+                ]
+            )
+            evidence_event = append_event(
+                [
+                    "--run-dir",
+                    str(run_dir),
+                    "--kind",
+                    "artifact",
+                    "--actor",
+                    spec["actor"],
+                    "--to",
+                    spec["to"],
+                    "--thread-id",
+                    thread_id,
+                    "--summary",
+                    f"{spec['summary']} send evidence",
+                    "--body",
+                    evidence_body,
+                    "--print-json",
+                ]
+            )
         next_actions = ["Wait for the next role handoff through the roster target."]
     else:
+        evidence_event = {}
         error = args.error.strip()
         if not error:
             raise SystemExit("--error is required when --result failed.")
@@ -132,6 +170,7 @@ def finalize(args: argparse.Namespace) -> dict[str, Any]:
         "send_result": args.result,
         "outbound_event": outbound_event,
         "result_event": result_event,
+        "evidence_event": evidence_event,
         "next_actions": next_actions,
     }
 
@@ -157,6 +196,8 @@ def main() -> int:
     parser.add_argument("--event-id", default="", help="Prepared outbound event id. Defaults to the latest matching event.")
     parser.add_argument("--result", required=True, choices=["sent", "failed"], help="Actual send result.")
     parser.add_argument("--error", default="", help="Required failure detail when --result failed.")
+    parser.add_argument("--send-evidence", default="", help="Optional send_message_to_thread result or receipt text for successful sends.")
+    parser.add_argument("--send-evidence-file", default="", help="Optional file containing send evidence for successful sends.")
     parser.add_argument("--summary", default="", help="Override recorded result summary.")
     parser.add_argument("--print-json", action="store_true", help="Print machine-readable summary.")
     args = parser.parse_args()

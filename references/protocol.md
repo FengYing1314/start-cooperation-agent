@@ -86,7 +86,7 @@ The JSON result includes `next_commands` and `next_actions`; use them to inspect
 
 Use `scripts/prepare_outbound_handoff.py --run-dir <run-dir> --kind <outbound-kind> --body-file <payload.md> --print-json` before Manager sends outbound work orders or review requests. It validates the exact payload, records it in the ledger, resolves the roster target thread id, and returns LLM-readable `next_actions` plus finalize commands for sent or failed delivery.
 
-Use `scripts/finalize_outbound_handoff.py --run-dir <run-dir> --kind <outbound-kind> --event-id <event-id> --result sent --print-json` only after the thread message really sends. Use `--result failed --error "<send error>"` after a real send failure; it records a blocker and does not advance the run status.
+Use `scripts/finalize_outbound_handoff.py --run-dir <run-dir> --kind <outbound-kind> --event-id <event-id> --result sent --print-json` only after the thread message really sends. When the thread tool returns a useful receipt or result, include it with `--send-evidence` or `--send-evidence-file`; the script records it as an artifact without changing the run status. Use `--result failed --error "<send error>"` after a real send failure; it records a blocker and does not advance the run status.
 
 Use `scripts/record_inbound_handoff.py --run-dir <run-dir> --kind <inbound-kind> --body-file <payload.md> --print-json` after receiving a direct Codex App thread handoff from Developer or Reviewer. It validates and records the exact received payload, advances only the safe receipt status, and returns LLM-readable follow-up commands for Manager-owned checkpoints, Reviewer fix copies, or acceptance decisions.
 
@@ -100,7 +100,7 @@ Use `scripts/validate_handoff.py --kind <handoff-kind> --body-file <payload.md> 
 
 Use `scripts/inspect_run.py --run-dir <run-dir> --print-json` before resuming or auditing a run. It reports `ok`, current status, next allowed statuses, last event, ledger consistency problems, and LLM-readable `next_actions`.
 
-When `inspect_run.py` or `inspect_project.py` reports `pending_outbound`, resume by reading that exact `payload_file` and calling `send_message_to_thread` with `threadId=<send_to_thread_id>` and `prompt=<exact file contents>`, then run `finalize_sent_command` or `finalize_failed_command`. Do not send only the file path, and do not prepare a duplicate handoff until the pending send has a recorded outcome.
+When `inspect_run.py` or `inspect_project.py` reports `pending_outbound`, resume by reading that exact `payload_file` and calling `send_message_to_thread` with `threadId=<send_to_thread_id>` and `prompt=<exact file contents>`, then run `finalize_sent_command` or `finalize_failed_command`. If the send tool returns a useful receipt, add `--send-evidence` or `--send-evidence-file` to the sent finalize command. Do not send only the file path, and do not prepare a duplicate handoff until the pending send has a recorded outcome.
 
 In `subagent` or `single-agent` mode, `init_run.py` can create a run without an initialized team, but `--fallback-reason` is required and must explain why the long-lived thread team is not being used.
 
@@ -195,7 +195,7 @@ Direct send sequence:
 2. Run prepare_outbound_handoff.py for Manager-originated outbound handoffs, or validate_handoff.py for received/manual-relay payloads.
 3. If resuming and inspect_run.py reports pending_outbound, reuse that payload instead of preparing a duplicate.
 4. Read the prepared payload file and send its exact contents to the returned roster target with send_message_to_thread.
-5. If sending succeeds, run the returned finalize_sent_command to append `developer_running` or `reviewer_running`.
+5. If sending succeeds, run the returned finalize_sent_command to append `developer_running` or `reviewer_running`; include `--send-evidence` or `--send-evidence-file` when a tool receipt is available.
 6. If sending fails, run the returned finalize_failed_command to record a blocker with the unsent target and payload location; do not advance the run status.
 ```
 

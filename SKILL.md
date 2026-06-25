@@ -40,7 +40,7 @@ Keep handoff messages short. Put bulky logs, diffs, traces, screenshots, or repo
 
 When a script returns `next_commands` or `next_actions`, follow those structured hints instead of reconstructing equivalent commands from prose.
 
-If `inspect_run.py` or `inspect_project.py` returns `pending_outbound`, finish that exact send first: read `pending_outbound.payload_file`, call `send_message_to_thread` with `threadId=pending_outbound.send_to_thread_id` and `prompt=<exact file contents>`, then run the returned finalize command for success or failure. Do not send only the file path as the prompt, and do not compose a replacement payload unless the pending send is explicitly failed or obsolete.
+If `inspect_run.py` or `inspect_project.py` returns `pending_outbound`, finish that exact send first: read `pending_outbound.payload_file`, call `send_message_to_thread` with `threadId=pending_outbound.send_to_thread_id` and `prompt=<exact file contents>`, then run the returned finalize command for success or failure. Include `--send-evidence` or `--send-evidence-file` with the sent finalize command when the tool returns a useful receipt. Do not send only the file path as the prompt, and do not compose a replacement payload unless the pending send is explicitly failed or obsolete.
 
 Before Manager sends an outbound work order or review request, use the prepare/finalize helpers:
 
