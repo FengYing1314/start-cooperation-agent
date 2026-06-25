@@ -19,12 +19,23 @@ def rel(path: Path) -> str:
     return str(path.relative_to(SKILL_ROOT))
 
 
-def run_step(label: str, command: list[str]) -> None:
+def run_step(label: str, command: list[str], *, command_timeout_seconds: float = 0.0) -> None:
     print(f"== {label}", flush=True)
     print(" ".join(command), flush=True)
     env = os.environ.copy()
     env["PYTHONDONTWRITEBYTECODE"] = "1"
-    proc = subprocess.run(command, cwd=str(SKILL_ROOT), env=env, check=False)
+    timeout = None if command_timeout_seconds <= 0 else command_timeout_seconds
+    try:
+        proc = subprocess.run(
+            command,
+            cwd=str(SKILL_ROOT),
+            env=env,
+            check=False,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        print(f"Command timed out after {timeout}s: {exc.cmd}", flush=True)
+        raise SystemExit(1)
     if proc.returncode != 0:
         raise SystemExit(proc.returncode)
 
@@ -85,6 +96,12 @@ def main() -> int:
         help="Fail if any selected test runtime exceeds this many seconds (0 to disable).",
     )
     parser.add_argument(
+        "--command-timeout-seconds",
+        type=float,
+        default=0.0,
+        help="Per-command timeout for validation subprocesses in seconds (0 to disable).",
+    )
+    parser.add_argument(
         "--list-tests",
         action="store_true",
         help="Print available test names from test_start_work and exit.",
@@ -97,14 +114,22 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.list_tests:
-        run_step("list tests", [sys.executable, rel(SCRIPT_DIR / "test_start_work.py"), "--list-tests"])
+        run_step(
+            "list tests",
+            [sys.executable, rel(SCRIPT_DIR / "test_start_work.py"), "--list-tests"],
+            command_timeout_seconds=args.command_timeout_seconds,
+        )
         return 0
 
     has_mode = bool(args.ultra_fast or args.fast or args.quick)
     if args.tests and has_mode:
         raise SystemExit("--tests cannot be used with --ultra-fast/--fast/--quick.")
 
-    run_step("compile scripts", [sys.executable, "-m", "py_compile", *python_scripts()])
+    run_step(
+        "compile scripts",
+        [sys.executable, "-m", "py_compile", *python_scripts()],
+        command_timeout_seconds=args.command_timeout_seconds,
+    )
     test_command = [sys.executable, rel(SCRIPT_DIR / "test_start_work.py")]
     if args.ultra_fast:
         test_command.append("--ultra-fast")
@@ -119,13 +144,21 @@ def main() -> int:
         test_command.extend(["--max-test-seconds", str(args.max_test_seconds)])
     if args.profile:
         test_command.append("--profile")
-    run_step("smoke tests", test_command)
+    run_step("smoke tests", test_command, command_timeout_seconds=args.command_timeout_seconds)
 
     if args.skip_git_diff_check:
         print("== git diff checks skipped")
     elif is_git_worktree():
-        run_step("git diff --check", ["git", "diff", "--check"])
-        run_step("git diff --cached --check", ["git", "diff", "--cached", "--check"])
+        run_step(
+            "git diff --check",
+            ["git", "diff", "--check"],
+            command_timeout_seconds=args.command_timeout_seconds,
+        )
+        run_step(
+            "git diff --cached --check",
+            ["git", "diff", "--cached", "--check"],
+            command_timeout_seconds=args.command_timeout_seconds,
+        )
     else:
         print("== git diff checks skipped: not a git worktree")
 

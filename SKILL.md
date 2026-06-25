@@ -164,6 +164,7 @@ python3 scripts/validate_start_work.py --tests test_team_id_is_stable --max-test
 python3 scripts/validate_start_work.py --tests test_team_id_is_stable --profile
 python3 scripts/validate_start_work.py --ultra-fast --profile
 python3 scripts/test_start_work.py --ultra-fast --profile
+python3 scripts/validate_start_work.py --ultra-fast --command-timeout-seconds 20
 python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
 ```
 

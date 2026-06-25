@@ -36,6 +36,7 @@ SCORE_TRIGGER_EVALS = SCRIPT_DIR / "score_trigger_evals.py"
 PREPARE_TRIGGER_EVAL_WORKSPACE = SCRIPT_DIR / "prepare_trigger_eval_workspace.py"
 RUN_TRIGGER_EVAL_PLAN = SCRIPT_DIR / "run_trigger_eval_plan.py"
 SKILL_ROOT = SCRIPT_DIR.parent
+DEFAULT_COMMAND_TIMEOUT: float | None = None
 
 
 def import_contract_module():
@@ -62,8 +63,26 @@ def import_drill_module():
     return plan_codex_thread_drill
 
 
-def run(command: list[str], *, check: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-    proc = subprocess.run(command, capture_output=True, text=True, check=False, env=env)
+def run(
+    command: list[str],
+    *,
+    check: bool = True,
+    env: dict[str, str] | None = None,
+    timeout: float | None = None,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        proc = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AssertionError(
+            f"Command timed out after {timeout}s: {' '.join(command)}"
+        ) from exc
     if check and proc.returncode != 0:
         raise AssertionError(
             f"Command failed: {' '.join(command)}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
@@ -88,8 +107,15 @@ def make_repo(root: Path, name: str) -> Path:
     return repo
 
 
-def script(path: Path, *args: str, check: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-    return run([sys.executable, str(path), *args], check=check, env=env)
+def script(
+    path: Path,
+    *args: str,
+    check: bool = True,
+    env: dict[str, str] | None = None,
+    timeout: float | None = None,
+) -> subprocess.CompletedProcess[str]:
+    real_timeout = DEFAULT_COMMAND_TIMEOUT if timeout is None else timeout
+    return run([sys.executable, str(path), *args], check=check, env=env, timeout=real_timeout)
 
 
 def init_team(repo: Path, *args: str) -> dict[str, object]:
@@ -2870,6 +2896,12 @@ def main() -> int:
         default=0.0,
         help="Fail if any selected test runtime exceeds this many seconds (0 to disable).",
     )
+    parser.add_argument(
+        "--command-timeout-seconds",
+        type=float,
+        default=0.0,
+        help="Per-subprocess timeout for test helper commands in seconds (0 to disable).",
+    )
     args = parser.parse_args()
 
     test_by_name = {test.__name__: test for test in ALL_TESTS}
@@ -2906,6 +2938,10 @@ def main() -> int:
         selected_names = [test.__name__ for test in tests]
         print("\n".join(selected_names))
         return 0
+
+    if args.command_timeout_seconds > 0:
+        global DEFAULT_COMMAND_TIMEOUT
+        DEFAULT_COMMAND_TIMEOUT = args.command_timeout_seconds
 
     timings = []
     with tempfile.TemporaryDirectory(prefix="start-work-tests-") as temp:
