@@ -1,4 +1,4 @@
 interface:
   display_name: "Start Work"
-  short_description: "Coordinate roster-routed dev agents"
-  default_prompt: "Use $start-work to initialize or reuse a project-level Manager, Developer, and Reviewer team with roster-based handoffs, run ledgers, direct thread messages when available, and callback/manual relay fallback."
+  short_description: "Coordinate Codex App thread teams"
+  default_prompt: "Use $start-work to coordinate a reusable Codex App Manager/Developer/Reviewer thread team with roster-routed handoffs, run ledgers, and direct-message recovery."

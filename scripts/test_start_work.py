@@ -800,9 +800,13 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "full fix-review loop as an executable invariant" in protocol, protocol
 
     openai_yaml = (SKILL_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
+    assert "Coordinate Codex App thread teams" in openai_yaml, openai_yaml
+    assert "Use $start-work" in openai_yaml, openai_yaml
+    assert "Manager/Developer/Reviewer" in openai_yaml, openai_yaml
     assert "roster-routed" in openai_yaml, openai_yaml
-    assert "callback/manual relay fallback" in openai_yaml, openai_yaml
+    assert "run ledgers" in openai_yaml, openai_yaml
     assert "direct-message development team" not in openai_yaml, openai_yaml
+    assert "Coordinate roster-routed dev agents" not in openai_yaml, openai_yaml
 
     codex_thread = (SKILL_ROOT / "references" / "codex-thread-mode.md").read_text(encoding="utf-8")
     assert "do not infer or guess" in codex_thread, codex_thread
