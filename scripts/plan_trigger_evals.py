@@ -47,6 +47,8 @@ def build_plan(args: argparse.Namespace) -> list[dict[str, object]]:
     artifact_dir = Path(args.artifact_dir).expanduser()
     if not artifact_dir.is_absolute():
         artifact_dir = (SKILL_ROOT / artifact_dir).resolve()
+    cwd_arg = getattr(args, "cwd", "")
+    cwd = Path(cwd_arg).expanduser().resolve() if cwd_arg else None
 
     plan = []
     for row in parse_table(prompts_path):
@@ -59,6 +61,7 @@ def build_plan(args: argparse.Namespace) -> list[dict[str, object]]:
                 "focus": row["focus"],
                 "prompt": row["prompt"],
                 "artifact": str(artifact),
+                "cwd": str(cwd) if cwd else "",
                 "command": command,
                 "shell": f"{shell_quote(command)} > {shlex.quote(str(artifact))}",
             }
@@ -74,6 +77,7 @@ def main() -> int:
         default=".agent-work/start-work/evals/trigger",
         help="Directory where jsonl traces should be written by the displayed commands.",
     )
+    parser.add_argument("--cwd", default="", help="Repository directory where each eval command should run.")
     parser.add_argument("--codex-bin", default="codex", help="Codex CLI executable name or path.")
     parser.add_argument("--print-json", action="store_true", help="Print the plan as JSON.")
     args = parser.parse_args()
@@ -85,6 +89,8 @@ def main() -> int:
         for item in plan:
             expected = "trigger" if item["should_trigger"] else "stay idle"
             print(f"{item['id']} [{expected}] {item['focus']}")
+            if item["cwd"]:
+                print(f"cwd: {item['cwd']}")
             print(item["shell"])
     return 0
 

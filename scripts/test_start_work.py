@@ -767,13 +767,16 @@ def test_trigger_eval_prompts_are_balanced(root: Path) -> None:
 def test_trigger_eval_plan_is_stable(root: Path) -> None:
     assert PLAN_TRIGGER_EVALS.exists(), PLAN_TRIGGER_EVALS
     prompt_rows = parse_markdown_table((SKILL_ROOT / "references" / "trigger-eval-prompts.md").read_text(encoding="utf-8"))
-    proc = script(PLAN_TRIGGER_EVALS, "--artifact-dir", str(root / "evals"), "--print-json")
+    cwd = root / "fixture-repo"
+    cwd.mkdir()
+    proc = script(PLAN_TRIGGER_EVALS, "--artifact-dir", str(root / "evals"), "--cwd", str(cwd), "--print-json")
     plan = json.loads(proc.stdout)
     assert len(plan) == len(prompt_rows), plan
     assert {item["should_trigger"] for item in plan} == {True, False}, plan
     first = plan[0]
     assert first["id"] == "trig-01", first
     assert first["command"][:3] == ["codex", "exec", "--json"], first
+    assert first["cwd"] == str(cwd.resolve()), first
     assert first["artifact"].endswith("trig-01-explicit.jsonl"), first
     assert "$start-work" in first["prompt"], first
     assert ">" in first["shell"], first
@@ -795,6 +798,7 @@ def test_prepare_trigger_eval_workspace(root: Path) -> None:
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
     assert result["prompt_count"] == len(plan), result
     assert all(Path(item["artifact"]).parent == Path(result["artifact_dir"]) for item in plan), plan
+    assert all(item["cwd"] == str(repo) for item in plan), plan
 
 
 def test_trigger_eval_score_reads_jsonl_artifacts(root: Path) -> None:

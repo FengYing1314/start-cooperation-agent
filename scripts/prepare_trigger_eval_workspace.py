@@ -68,6 +68,7 @@ def main() -> int:
         SimpleNamespace(
             prompts=args.prompts,
             artifact_dir=str(artifact_dir),
+            cwd=str(repo),
             codex_bin=args.codex_bin,
         )
     )
