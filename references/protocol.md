@@ -84,7 +84,7 @@ Use `scripts/init_run.py` to create a run. In `codex-thread` mode it must read `
 
 The JSON result includes `next_commands` and `next_actions`; use them to inspect the run, prepare the work-order payload, and only advance to a direct-send running status after a real thread message succeeds.
 
-Use `scripts/prepare_outbound_handoff.py --run-dir <run-dir> --kind <outbound-kind> --body-file <payload.md> --print-json` before sending outbound work orders, review requests, or reviewer fix handoffs. It validates the exact payload, records it in the ledger, resolves the roster target thread id, and returns LLM-readable `next_actions` plus finalize commands for sent or failed delivery.
+Use `scripts/prepare_outbound_handoff.py --run-dir <run-dir> --kind <outbound-kind> --body-file <payload.md> --print-json` before Manager sends outbound work orders or review requests. It validates the exact payload, records it in the ledger, resolves the roster target thread id, and returns LLM-readable `next_actions` plus finalize commands for sent or failed delivery.
 
 Use `scripts/finalize_outbound_handoff.py --run-dir <run-dir> --kind <outbound-kind> --event-id <event-id> --result sent --print-json` only after the thread message really sends. Use `--result failed --error "<send error>"` after a real send failure; it records a blocker and does not advance the run status.
 
@@ -190,10 +190,10 @@ Direct send sequence:
 
 ```text
 1. Compose the handoff payload from the matching template.
-2. Run prepare_outbound_handoff.py for outbound handoffs, or validate_handoff.py for received/manual-relay payloads.
+2. Run prepare_outbound_handoff.py for Manager-originated outbound handoffs, or validate_handoff.py for received/manual-relay payloads.
 3. If resuming and inspect_run.py reports pending_outbound, reuse that payload instead of preparing a duplicate.
 4. Send the prepared payload file to the returned roster target with send_message_to_thread.
-5. If sending succeeds, run the returned finalize_sent_command to append `developer_running`, `reviewer_running`, or `developer_fix_running`.
+5. If sending succeeds, run the returned finalize_sent_command to append `developer_running` or `reviewer_running`.
 6. If sending fails, run the returned finalize_failed_command to record a blocker with the unsent target and payload location; do not advance the run status.
 ```
 

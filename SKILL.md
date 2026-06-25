@@ -40,14 +40,14 @@ When a script returns `next_commands` or `next_actions`, follow those structured
 
 If `inspect_run.py` or `inspect_project.py` returns `pending_outbound`, finish that exact send first: send `pending_outbound.payload_file` to `pending_outbound.send_to_thread_id`, then run the returned finalize command for success or failure. Do not compose a replacement payload unless the pending send is explicitly failed or obsolete.
 
-Before sending an outbound work order, review request, or reviewer fix handoff, prefer the prepare/finalize helpers:
+Before Manager sends an outbound work order or review request, use the prepare/finalize helpers:
 
 ```bash
 python3 <skill-dir>/scripts/prepare_outbound_handoff.py --run-dir <run-dir> --kind <outbound-kind> --body-file <payload.md> --print-json
 python3 <skill-dir>/scripts/finalize_outbound_handoff.py --run-dir <run-dir> --kind <outbound-kind> --event-id <event-id> --result sent --print-json
 ```
 
-Outbound kinds: `work_order`, `review_request`, `reviewer_fix`.
+Outbound kinds: `work_order`, `review_request`. Reviewer fix handoffs are Reviewer-originated; Manager records the separate copy with inbound kind `reviewer_fix`.
 
 After receiving a direct Codex App thread handoff from Developer or Reviewer, record the exact payload:
 

@@ -30,14 +30,6 @@ OUTBOUND_RESUME = {
         "post_send_status": "reviewer_running",
         "send_action": "Send the payload to R1 with send_message_to_thread.",
     },
-    "reviewer_fix": {
-        "actor": "R1",
-        "to": "D1",
-        "current_status": "fix_required",
-        "record_status": "fix_required",
-        "post_send_status": "developer_fix_running",
-        "send_action": "Send the payload to D1 with send_message_to_thread and send a separate Manager copy.",
-    },
 }
 
 

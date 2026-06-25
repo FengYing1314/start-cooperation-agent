@@ -37,15 +37,6 @@ OUTBOUND = {
         "post_send_summary": "review request sent",
         "next_action": "Send the recorded review request to R1 with send_message_to_thread, then run finalize_sent_command only after the send succeeds.",
     },
-    "reviewer_fix": {
-        "actor": "R1",
-        "to": "D1",
-        "record_status": "fix_required",
-        "summary": "blocking fix request ready",
-        "post_send_status": "developer_fix_running",
-        "post_send_summary": "blocking fix request sent",
-        "next_action": "Send the recorded fix request to D1 and a separate Manager copy, then run finalize_sent_command only after the D1 send succeeds.",
-    },
 }
 
 

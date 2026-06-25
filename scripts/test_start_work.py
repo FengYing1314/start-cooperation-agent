@@ -721,6 +721,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "record_inbound_handoff.py" in skill, skill
     assert "validate_handoff.py" in skill, skill
     assert "reviewer_accepted" in skill, skill
+    assert "Outbound kinds: `work_order`, `review_request`" in skill, skill
+    assert "Reviewer fix handoffs are Reviewer-originated" in skill, skill
     assert "check_trigger_eval_cli.py" in skill, skill
     assert "run_trigger_eval_plan.py" in skill, skill
     assert "start_work_contract.py" in skill, skill
@@ -778,6 +780,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "finalize_outbound_handoff.py" in protocol, protocol
     assert "record_inbound_handoff.py" in protocol, protocol
     assert "validate_handoff.py" in protocol, protocol
+    assert "Manager-originated outbound handoffs" in protocol, protocol
     assert "## Mode-Specific Transport" in protocol, protocol
     assert "Direct codex-thread route" in protocol, protocol
     assert "do not claim that a thread message was sent unless one really was" in protocol, protocol
@@ -900,6 +903,20 @@ Status: complete | blocked
 def test_prepare_outbound_handoff_records_and_routes(root: Path) -> None:
     assert PREPARE_OUTBOUND_HANDOFF.exists(), PREPARE_OUTBOUND_HANDOFF
     assert FINALIZE_OUTBOUND_HANDOFF.exists(), FINALIZE_OUTBOUND_HANDOFF
+    unsupported_fix = script(
+        PREPARE_OUTBOUND_HANDOFF,
+        "--run-dir",
+        str(root),
+        "--kind",
+        "reviewer_fix",
+        "--body",
+        "payload",
+        "--print-json",
+        check=False,
+    )
+    unsupported_combined = unsupported_fix.stdout + unsupported_fix.stderr
+    assert unsupported_fix.returncode != 0, unsupported_combined
+    assert "invalid choice" in unsupported_combined and "reviewer_fix" in unsupported_combined, unsupported_combined
     repo = make_repo(root, "prepare-outbound")
     init_team(
         repo,
