@@ -271,7 +271,8 @@ def test_project_inspection_summarizes_team_and_recent_runs(root: Path) -> None:
     assert latest["current_status"] == "manager_work_order", summary
     assert latest["event_count"] == 1, summary
     assert any("Resume latest run" in item for item in summary["next_actions"]), summary
-    assert any("Send the recorded work order" in item for item in summary["next_actions"]), summary
+    assert any("prepare_outbound_handoff.py --kind work_order" in item for item in summary["next_actions"]), summary
+    assert any("finalize_sent_command" in item for item in summary["next_actions"]), summary
     assert latest["next_actions"], latest
     assert Path(str(first["run_dir"])).exists(), first
 
@@ -359,10 +360,9 @@ def test_direct_thread_happy_path(root: Path) -> None:
     assert run_commands["inspect_run"][run_commands["inspect_run"].index("--run-dir") + 1] == str(run_dir), run_commands
     assert run_commands["prepare_work_order"][1].endswith("prepare_outbound_handoff.py"), run_commands
     assert "work_order" in run_commands["prepare_work_order"], run_commands
-    assert run_commands["record_work_order"][1].endswith("append_event.py"), run_commands
-    assert "manager_work_order" in run_commands["record_work_order"], run_commands
-    assert "dev-thread" in run_commands["record_developer_running"], run_commands
-    assert any("Only after the send succeeds" in item for item in run_data["next_actions"]), run_data
+    assert "record_work_order" not in run_commands, run_commands
+    assert "record_developer_running" not in run_commands, run_commands
+    assert any("finalize_sent_command" in item for item in run_data["next_actions"]), run_data
     invalid_result = script(
         APPEND_EVENT,
         "--run-dir",
@@ -615,7 +615,8 @@ def test_subagent_fallback_without_team(root: Path) -> None:
     data = json.loads(proc.stdout)
     assert data["mode"] == "subagent", data
     assert data["fallback_reason"] == "thread tools unavailable", data
-    assert "record_work_order" in data["next_commands"], data
+    assert "prepare_work_order" in data["next_commands"], data
+    assert "record_work_order" not in data["next_commands"], data
     assert "record_developer_running" not in data["next_commands"], data
     assert any("do not record direct-send running status" in item for item in data["next_actions"]), data
     run_dir = Path(str(data["run_dir"]))

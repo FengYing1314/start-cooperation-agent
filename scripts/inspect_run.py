@@ -198,8 +198,8 @@ def next_actions(
         ]
     if current_status == "manager_work_order":
         return [
-            "Send the recorded work order to D1 with send_message_to_thread.",
-            "Only after the send succeeds, append developer_running.",
+            "If pending_outbound is missing, prepare the work order with prepare_outbound_handoff.py --kind work_order.",
+            "Send the prepared payload_file to D1 with send_message_to_thread, then run finalize_sent_command or finalize_failed_command.",
         ]
     if current_status == "developer_running":
         return [
@@ -213,8 +213,8 @@ def next_actions(
         ]
     if current_status == "main_integration_check":
         return [
-            "Prepare the review-ready package from references/templates-review.md.",
-            "Send it to R1, then append reviewer_running only after the send succeeds.",
+            "Prepare the review-ready package from references/templates-review.md with prepare_outbound_handoff.py --kind review_request.",
+            "Send it to R1, then run finalize_sent_command or finalize_failed_command.",
         ]
     if current_status == "reviewer_running":
         return [
@@ -228,8 +228,8 @@ def next_actions(
         ]
     if current_status == "fix_required":
         return [
-            "Route blocking fixes to D1 or Manager according to ownership.",
-            "Append developer_fix_running after sending a real Developer fix request, or main_fixing when Manager owns the fix.",
+            "Reviewer-originated D1 fix handoffs should arrive as a Manager copy and be recorded with record_inbound_handoff.py --kind reviewer_fix.",
+            "If Manager owns the fix instead, append main_fixing.",
         ]
     if current_status == "developer_fix_running":
         return [

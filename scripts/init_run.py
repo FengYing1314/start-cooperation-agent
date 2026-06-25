@@ -363,36 +363,13 @@ def mark_team_used(team_path: Path, team: dict[str, object], timestamp: str) -> 
     team_path.write_text(json.dumps(team, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def next_commands(run_dir: Path, team: dict[str, object], mode: str) -> dict[str, list[str]]:
-    roster = team.get("roster", {})
-    developer_thread = ""
-    if isinstance(roster, dict) and isinstance(roster.get("D1"), dict):
-        developer_thread = str(roster["D1"].get("thread_id", ""))
-    commands = {
+def next_commands(run_dir: Path) -> dict[str, list[str]]:
+    return {
         "inspect_run": [
             sys.executable,
             str(SCRIPT_DIR / "inspect_run.py"),
             "--run-dir",
             str(run_dir),
-            "--print-json",
-        ],
-        "record_work_order": [
-            sys.executable,
-            str(SCRIPT_DIR / "append_event.py"),
-            "--run-dir",
-            str(run_dir),
-            "--kind",
-            "message",
-            "--actor",
-            "M",
-            "--to",
-            "D1",
-            "--summary",
-            "work order ready",
-            "--run-status",
-            "manager_work_order",
-            "--body-file",
-            "<work-order-payload.md>",
             "--print-json",
         ],
         "prepare_work_order": [
@@ -407,27 +384,6 @@ def next_commands(run_dir: Path, team: dict[str, object], mode: str) -> dict[str
             "--print-json",
         ],
     }
-    if mode == "codex-thread":
-        commands["record_developer_running"] = [
-            sys.executable,
-            str(SCRIPT_DIR / "append_event.py"),
-            "--run-dir",
-            str(run_dir),
-            "--kind",
-            "status",
-            "--actor",
-            "M",
-            "--to",
-            "D1",
-            "--thread-id",
-            developer_thread or "<developer-thread-id>",
-            "--summary",
-            "work order sent",
-            "--run-status",
-            "developer_running",
-            "--print-json",
-        ]
-    return commands
 
 
 def next_actions(mode: str) -> list[str]:
@@ -439,8 +395,8 @@ def next_actions(mode: str) -> list[str]:
     if mode == "codex-thread":
         actions.extend(
             [
-                "Send the same work-order payload to D1 with send_message_to_thread.",
-                "Only after the send succeeds, run record_developer_running.",
+                "Send prepare_work_order's payload_file to D1 with send_message_to_thread.",
+                "After the send succeeds, run prepare_work_order's finalize_sent_command; if it fails, run finalize_failed_command.",
             ]
         )
     else:
@@ -572,7 +528,7 @@ def main() -> int:
         "snapshots_written": snapshots_written,
         "snapshot_refreshed": bool(args.refresh_snapshot and snapshots_written and not created),
         "invoked_at": now.isoformat(),
-        "next_commands": next_commands(run_dir, team, args.mode),
+        "next_commands": next_commands(run_dir),
         "next_actions": next_actions(args.mode),
     }
 
