@@ -248,6 +248,7 @@ def recommended_next_actions(
     if not team.get("ok"):
         return [
             "Run the non-destructive preflight first.",
+            "Include list_projects and rerun this script with --codex-project <projectId=path> before any live drill.",
             "Ask the user for explicit approval before creating role threads or sending standing instructions.",
             "After approval, initialize the roster and require D1/R1 acknowledgements before any task run.",
         ]
@@ -258,7 +259,8 @@ def recommended_next_actions(
         ]
     if team.get("codex_thread_ready"):
         return [
-            "Confirm the exact Codex App project target with list_projects, then ask the user for explicit live-drill approval.",
+            "Confirm the exact Codex App project target with list_projects and rerun this script with --codex-project <projectId=path>.",
+            "Ask the user for explicit live-drill approval only after codex_project_match.matched=true.",
             "The drill should prove M->D1, D1->M, M->R1, and R1->M or R1->D1 plus Manager copy without Manager polling.",
         ]
     return ["Inspect team readiness again before attempting a live drill."]
@@ -269,17 +271,21 @@ def build_plan(repo: Path, limit: int, codex_projects: list[dict[str, str]]) -> 
     team = inspect_team(repo)
     project_match = codex_project_match(repo, codex_projects)
     pending_outbound_count, reviewer_fix_needs_send_count = count_pending(project.get("latest_runs"))
-    project_gate_ok = not project_match["checked"] or bool(project_match["matched"])
-    ready_for_live_drill = bool(
+    ledger_ready_for_live_drill = bool(
         team.get("codex_thread_ready")
         and not pending_outbound_count
         and not reviewer_fix_needs_send_count
         and not project.get("problems")
-        and project_gate_ok
+    )
+    ready_for_live_drill = bool(
+        ledger_ready_for_live_drill
+        and project_match["checked"]
+        and project_match["matched"]
     )
     return {
         "ok": True,
         "repo": str(repo),
+        "ledger_ready_for_live_drill": ledger_ready_for_live_drill,
         "ready_for_live_drill": ready_for_live_drill,
         "requires_explicit_live_drill_approval": True,
         "can_run_non_destructive_preflight_now": True,
@@ -312,6 +318,7 @@ def print_text(plan: dict[str, object]) -> None:
     project_match = plan.get("codex_project_match", {})
     print(f"OK: {str(plan.get('ok', False)).lower()}")
     print(f"Repo: {plan.get('repo', '')}")
+    print(f"Ledger Ready For Live Drill: {str(plan.get('ledger_ready_for_live_drill', False)).lower()}")
     print(f"Ready For Live Drill: {str(plan.get('ready_for_live_drill', False)).lower()}")
     print(f"Requires Explicit Live Drill Approval: {str(plan.get('requires_explicit_live_drill_approval', True)).lower()}")
     if isinstance(project_match, dict):

@@ -72,7 +72,7 @@ Use `scripts/plan_codex_thread_drill.py --repo <repo-root> --print-json` when as
 
 The plan is intentionally non-destructive. It may include `tool_search`, `list_projects`, exact `list_threads`, `inspect_project.py`, and `inspect_team.py` as safe preflight steps. After `list_projects`, pass each relevant candidate back into the plan as `--codex-project "<projectId>=<path>"`; use `codex_project_match` as the evidence for whether the Codex App project target exactly matches the repo. It must list `create_thread`, `send_message_to_thread`, and normal `read_thread` usage under `blocked_without_approval` until there is an explicit live-drill or team-initialization request.
 
-Treat `ready_for_live_drill=true` as readiness only, not consent. After approval, the drill should prove:
+Treat `ledger_ready_for_live_drill=true` as local roster/run readiness only. Treat `ready_for_live_drill=true` as local readiness plus exact Codex App project match, not consent. After approval, the drill should prove:
 
 1. Manager sends an exact prepared work-order payload to D1.
 2. D1 sends `developer_completion` directly to Manager.

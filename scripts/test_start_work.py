@@ -269,7 +269,8 @@ def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> Non
     ack(repo, "D1")
     ack(repo, "R1")
     ready = json.loads(plan_codex_thread_drill(repo).stdout)
-    assert ready["ready_for_live_drill"] is True, ready
+    assert ready["ledger_ready_for_live_drill"] is True, ready
+    assert ready["ready_for_live_drill"] is False, ready
     state = ready["current_state"]
     assert state["codex_thread_ready"] is True, ready
     assert state["pending_outbound_count"] == 0, ready
@@ -284,6 +285,7 @@ def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> Non
     assert "reviewer_fix directly to D1" in drill_text, drill_text
     assert any("without Manager polling" in item for item in ready["recommended_next_actions"]), ready
     assert any("list_projects" in item for item in ready["recommended_next_actions"]), ready
+    assert any("matched=true" in item for item in ready["recommended_next_actions"]), ready
 
     unmatched = json.loads(plan_codex_thread_drill(repo, "--codex-project", "other-project=C:\\other\\repo").stdout)
     assert unmatched["codex_project_match"]["checked"] is True, unmatched
@@ -295,9 +297,12 @@ def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> Non
     assert matched["codex_project_match"]["checked"] is True, matched
     assert matched["codex_project_match"]["matched"] is True, matched
     assert matched["codex_project_match"]["matches"][0]["project_id"] == "project-1", matched
+    assert matched["ledger_ready_for_live_drill"] is True, matched
     assert matched["ready_for_live_drill"] is True, matched
 
     text_result = script(PLAN_CODEX_THREAD_DRILL, "--repo", str(repo))
+    assert "Ledger Ready For Live Drill: true" in text_result.stdout, text_result.stdout
+    assert "Ready For Live Drill: false" in text_result.stdout, text_result.stdout
     assert "Requires Explicit Live Drill Approval: true" in text_result.stdout, text_result.stdout
     assert "Codex Project Match Checked: false" in text_result.stdout, text_result.stdout
 
@@ -806,6 +811,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "inspect_project.py" in skill, skill
     assert "plan_codex_thread_drill.py" in skill, skill
     assert "--codex-project" in skill, skill
+    assert "ledger_ready_for_live_drill" in skill, skill
     assert "prepare_outbound_handoff.py" in skill, skill
     assert "finalize_outbound_handoff.py" in skill, skill
     assert "record_inbound_handoff.py" in skill, skill
@@ -870,6 +876,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "blocked_without_approval" in codex_thread, codex_thread
     assert "codex_project_match" in codex_thread, codex_thread
     assert "--codex-project" in codex_thread, codex_thread
+    assert "ledger_ready_for_live_drill" in codex_thread, codex_thread
     assert "ready_for_live_drill=true" in codex_thread, codex_thread
     assert "Allowed preflight actions" in codex_thread, codex_thread
     assert "Forbidden in preflight" in codex_thread, codex_thread
