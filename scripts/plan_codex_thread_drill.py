@@ -246,6 +246,73 @@ def live_drill_when_approved(repo: Path) -> list[dict[str, object]]:
     ]
 
 
+def live_drill_success_criteria() -> list[dict[str, str]]:
+    return [
+        {
+            "id": "project_target_proven",
+            "requirement": "codex_project_match.checked=true and matched=true for the repo before creating or sending role-thread messages.",
+        },
+        {
+            "id": "explicit_approval",
+            "requirement": "The user explicitly approved live thread creation or live drill execution in the current task context.",
+        },
+        {
+            "id": "roster_acknowledged",
+            "requirement": "M, D1, and R1 thread targets are recorded; standing instructions were sent; D1 and R1 acknowledgements are recorded.",
+        },
+        {
+            "id": "manager_to_developer_sent",
+            "requirement": "Manager prepared a work_order, sent the exact payload to D1, and finalized the send with evidence when available.",
+        },
+        {
+            "id": "developer_to_manager_received",
+            "requirement": "D1 sent developer_completion directly to M, and Manager recorded the exact payload with record_inbound_handoff.py.",
+        },
+        {
+            "id": "manager_to_reviewer_sent",
+            "requirement": "Manager completed the integration checkpoint, sent the exact review_request payload to R1, and finalized the send.",
+        },
+        {
+            "id": "reviewer_route_proven",
+            "requirement": "R1 sent reviewer_accepted to M, or sent reviewer_fix directly to D1 with a separate Manager copy and recorded send state.",
+        },
+        {
+            "id": "no_manager_polling_transport",
+            "requirement": "read_thread was not used as normal transport; any read_thread use is explicitly marked as recovery, audit, or user-requested status.",
+        },
+    ]
+
+
+def completion_evidence_contract(repo: Path) -> list[dict[str, object]]:
+    return [
+        {
+            "evidence": "codex_project_match",
+            "source": "plan_codex_thread_drill.py output after passing list_projects candidates with --codex-project.",
+            "must_show": ["checked=true", "matched=true", f"repo={repo}"],
+        },
+        {
+            "evidence": "team_readiness",
+            "source": "inspect_team.py --repo <repo-root> --print-json",
+            "must_show": ["codex_thread_ready=true", "acknowledgements_complete=true", "handoff_route_valid=true"],
+        },
+        {
+            "evidence": "manager_send_events",
+            "source": "prepare_outbound_handoff.py and finalize_outbound_handoff.py outputs plus run artifacts.",
+            "must_show": ["work_order finalized sent", "review_request finalized sent", "send evidence artifact when receipt exists"],
+        },
+        {
+            "evidence": "inbound_handoffs",
+            "source": "record_inbound_handoff.py outputs and run events.jsonl.",
+            "must_show": ["developer_completion recorded", "reviewer_accepted recorded or reviewer_fix send-state recorded"],
+        },
+        {
+            "evidence": "transport_audit",
+            "source": "final Manager summary and run artifacts.",
+            "must_show": ["role-to-role send_message_to_thread path", "no Manager polling as normal transport"],
+        },
+    ]
+
+
 def recommended_next_actions(
     *,
     team: dict[str, Any],
@@ -324,6 +391,8 @@ def build_plan(repo: Path, limit: int, codex_projects: list[dict[str, str]]) -> 
         "non_destructive_preflight": non_destructive_preflight(repo),
         "blocked_without_approval": blocked_without_approval(),
         "live_drill_when_approved": live_drill_when_approved(repo),
+        "live_drill_success_criteria": live_drill_success_criteria(),
+        "completion_evidence_contract": completion_evidence_contract(repo),
         "recommended_next_actions": recommended_next_actions(
             team=team,
             project_match=project_match,

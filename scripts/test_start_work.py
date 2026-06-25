@@ -265,6 +265,28 @@ def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> Non
     assert any(step.get("tool") == "list_projects" for step in unready["non_destructive_preflight"]), unready
     assert any(step.get("tool") == "list_threads" for step in unready["non_destructive_preflight"]), unready
     assert any("codex-project" in str(step.get("followup", "")) for step in unready["non_destructive_preflight"]), unready
+    criteria_ids = {item["id"] for item in unready["live_drill_success_criteria"]}
+    assert {
+        "project_target_proven",
+        "explicit_approval",
+        "roster_acknowledged",
+        "manager_to_developer_sent",
+        "developer_to_manager_received",
+        "manager_to_reviewer_sent",
+        "reviewer_route_proven",
+        "no_manager_polling_transport",
+    } <= criteria_ids, unready
+    evidence_keys = {item["evidence"] for item in unready["completion_evidence_contract"]}
+    assert {
+        "codex_project_match",
+        "team_readiness",
+        "manager_send_events",
+        "inbound_handoffs",
+        "transport_audit",
+    } <= evidence_keys, unready
+    evidence_text = json.dumps(unready["completion_evidence_contract"], ensure_ascii=False)
+    assert "developer_completion recorded" in evidence_text, evidence_text
+    assert "no Manager polling as normal transport" in evidence_text, evidence_text
     blocked_tools = {item.get("tool") for item in unready["blocked_without_approval"]}
     assert {"create_thread", "send_message_to_thread", "read_thread"} <= blocked_tools, unready
     assert any("explicit approval" in item for item in unready["recommended_next_actions"]), unready
@@ -864,6 +886,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "--codex-project" in skill, skill
     assert "ledger_ready_for_live_drill" in skill, skill
     assert "WSL UNC and native Linux path forms" in skill, skill
+    assert "live_drill_success_criteria" in skill, skill
+    assert "completion_evidence_contract" in skill, skill
     assert "prepare_outbound_handoff.py" in skill, skill
     assert "finalize_outbound_handoff.py" in skill, skill
     assert "record_inbound_handoff.py" in skill, skill
@@ -931,6 +955,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "ledger_ready_for_live_drill" in codex_thread, codex_thread
     assert "WSL UNC paths" in codex_thread, codex_thread
     assert "ready_for_live_drill=true" in codex_thread, codex_thread
+    assert "live_drill_success_criteria" in codex_thread, codex_thread
+    assert "completion_evidence_contract" in codex_thread, codex_thread
     assert "Allowed preflight actions" in codex_thread, codex_thread
     assert "Forbidden in preflight" in codex_thread, codex_thread
     assert "do not call `create_thread`" in codex_thread, codex_thread

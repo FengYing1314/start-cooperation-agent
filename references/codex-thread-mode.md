@@ -84,6 +84,8 @@ If the plan reports pending outbound sends or an unsent reviewer fix, resolve th
 
 If `codex_project_match.checked=true` and `matched=false`, stop before thread creation and add/open the correct Codex App project. Do not create long-lived D1/R1 threads under a different project target.
 
+Before claiming the live drill passed, check the plan's `live_drill_success_criteria` and `completion_evidence_contract`. The completion evidence must include the matched project target, ready acknowledged roster, Manager outbound send finalization for work and review, inbound Developer/Reviewer handoff recording, and confirmation that Manager did not use polling as normal transport.
+
 ## Project Selection
 
 Use `list_projects` before creating long-lived role threads. Select the project that matches the current repository root. If multiple candidates match, prefer the one with the exact path.
