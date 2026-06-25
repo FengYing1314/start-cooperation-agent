@@ -60,6 +60,7 @@ def main() -> int:
         action="store_true",
         help="Run the smallest validation subset for very fast iteration.",
     )
+    parser.add_argument("--profile", action="store_true", help="Run smoke tests with timing output.")
     parser.add_argument(
         "--skip-git-diff-check",
         action="store_true",
@@ -75,6 +76,8 @@ def main() -> int:
         test_command.append("--fast")
     elif args.quick:
         test_command.append("--quick")
+    if args.profile:
+        test_command.append("--profile")
     run_step("smoke tests", test_command)
 
     if args.skip_git_diff_check:
