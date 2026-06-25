@@ -738,6 +738,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "next_actions" in skill, skill
     assert "pending_outbound" in skill, skill
     assert "full fix-review loop progression" in skill, skill
+    assert "non-destructive Codex App preflight" in skill, skill
 
     template_index = (SKILL_ROOT / "references" / "templates.md").read_text(encoding="utf-8")
     assert "This file is an index" in template_index, template_index

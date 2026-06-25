@@ -25,7 +25,7 @@ Load only the reference needed for the next action:
 
 - `references/protocol.md` for team lifecycle, state machine, roster ownership, dirty work, ledger status, or handoff rules.
 - `references/roles.md` for role-specific duties, review/fix contracts, and what each role must not do.
-- `references/codex-thread-mode.md` for thread-tool discovery, project selection, thread creation, messaging, replacement, or fallback selection.
+- `references/codex-thread-mode.md` for thread-tool discovery, non-destructive Codex App preflight, project selection, thread creation, messaging, replacement, or fallback selection.
 - `references/templates-team.md` for team roster, standing instructions, acknowledgements, or roster-update payloads.
 - `references/templates-run.md` for selecting the right per-task template and applying direct-send status rules.
 - `references/templates-work-order.md` for Manager work orders and Developer completion handoffs.
