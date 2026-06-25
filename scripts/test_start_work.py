@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
 
@@ -68,6 +69,16 @@ def run(command: list[str], *, check: bool = True, env: dict[str, str] | None = 
             f"Command failed: {' '.join(command)}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
         )
     return proc
+
+
+def split_test_names(values: Iterable[str]) -> list[str]:
+    names: list[str] = []
+    for item in values:
+        for part in item.split(","):
+            name = part.strip()
+            if name:
+                names.append(name)
+    return names
 
 
 def make_repo(root: Path, name: str) -> Path:
@@ -2794,6 +2805,35 @@ QUICK_TESTS = [
 ]
 
 
+ALL_TESTS = [
+    test_team_id_is_stable,
+    test_team_inspection_requires_acknowledgements,
+    test_team_inspection_rejects_broken_handoff_route,
+    test_project_inspection_guides_preflight_without_team,
+    test_codex_thread_drill_plan_preserves_live_approval_gate,
+    test_codex_project_match_accepts_wsl_and_mount_equivalent_paths,
+    test_project_inspection_summarizes_team_and_recent_runs,
+    test_callback_only_rejected_for_direct_thread_mode,
+    test_direct_thread_happy_path,
+    test_full_fix_review_cycle_status_path,
+    test_run_json_status_mismatch_is_rejected,
+    test_subagent_fallback_without_team,
+    test_fallback_mode_requires_reason,
+    test_reference_routing_is_progressive,
+    test_handoff_payload_validation,
+    test_prepare_outbound_handoff_records_and_routes,
+    test_record_inbound_handoff_records_received_payloads,
+    test_trigger_eval_prompts_are_balanced,
+    test_trigger_eval_cli_check_reports_launchability,
+    test_trigger_eval_plan_is_stable,
+    test_prepare_trigger_eval_workspace,
+    test_trigger_eval_runner_respects_cwd_and_artifact,
+    test_trigger_eval_score_reads_jsonl_artifacts,
+    test_shared_contract_matches_generated_routes,
+    test_protocol_status_docs_match_contract,
+]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
@@ -2812,45 +2852,55 @@ def main() -> int:
         action="store_true",
         help="Run a broader fast subset for quick validation.",
     )
+    parser.add_argument(
+        "--list-tests",
+        action="store_true",
+        help="Print available test names and exit.",
+    )
+    parser.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        help="Run only the named tests (comma-separated and repeatable).",
+    )
     parser.add_argument("--profile", action="store_true", help="Print per-test runtime in seconds.")
     args = parser.parse_args()
 
-    full_tests = [
-        test_team_id_is_stable,
-        test_team_inspection_requires_acknowledgements,
-        test_team_inspection_rejects_broken_handoff_route,
-        test_project_inspection_guides_preflight_without_team,
-        test_codex_thread_drill_plan_preserves_live_approval_gate,
-        test_codex_project_match_accepts_wsl_and_mount_equivalent_paths,
-        test_project_inspection_summarizes_team_and_recent_runs,
-        test_callback_only_rejected_for_direct_thread_mode,
-        test_direct_thread_happy_path,
-        test_full_fix_review_cycle_status_path,
-        test_run_json_status_mismatch_is_rejected,
-        test_subagent_fallback_without_team,
-        test_fallback_mode_requires_reason,
-        test_reference_routing_is_progressive,
-        test_handoff_payload_validation,
-        test_prepare_outbound_handoff_records_and_routes,
-        test_record_inbound_handoff_records_received_payloads,
-        test_trigger_eval_prompts_are_balanced,
-        test_trigger_eval_cli_check_reports_launchability,
-        test_trigger_eval_plan_is_stable,
-        test_prepare_trigger_eval_workspace,
-        test_trigger_eval_runner_respects_cwd_and_artifact,
-        test_trigger_eval_score_reads_jsonl_artifacts,
-        test_shared_contract_matches_generated_routes,
-        test_protocol_status_docs_match_contract,
-    ]
+    test_by_name = {test.__name__: test for test in ALL_TESTS}
+    if args.ultra_fast and args.only:
+        raise SystemExit("--ultra-fast cannot be combined with --only.")
+    if args.fast and args.only:
+        raise SystemExit("--fast cannot be combined with --only.")
+    if args.quick and args.only:
+        raise SystemExit("--quick cannot be combined with --only.")
 
-    if args.ultra_fast:
+    if args.only:
+        selected = []
+        seen = set[str]()
+        for name in split_test_names(args.only):
+            if name not in test_by_name:
+                known = "\n".join(f"- {key}" for key in sorted(test_by_name))
+                raise SystemExit(
+                    f"Unknown test name: {name}\nKnown tests:\n{known}"
+                )
+            if name not in seen:
+                selected.append(test_by_name[name])
+                seen.add(name)
+        tests = selected
+    elif args.ultra_fast:
         tests = ULTRA_FAST_TESTS
     elif args.fast:
         tests = FAST_TESTS
     elif args.quick:
         tests = QUICK_TESTS
     else:
-        tests = full_tests
+        tests = ALL_TESTS
+
+    if args.list_tests:
+        selected_names = [test.__name__ for test in tests]
+        print("\n".join(selected_names))
+        return 0
+
     timings = []
     with tempfile.TemporaryDirectory(prefix="start-work-tests-") as temp:
         root = Path(temp)

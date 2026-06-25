@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from collections.abc import Iterable
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -26,6 +27,16 @@ def run_step(label: str, command: list[str]) -> None:
     proc = subprocess.run(command, cwd=str(SKILL_ROOT), env=env, check=False)
     if proc.returncode != 0:
         raise SystemExit(proc.returncode)
+
+
+def split_test_names(values: Iterable[str]) -> list[str]:
+    names: list[str] = []
+    for item in values:
+        for part in item.split(","):
+            name = part.strip()
+            if name:
+                names.append(name)
+    return names
 
 
 def python_scripts() -> list[str]:
@@ -62,11 +73,30 @@ def main() -> int:
     )
     parser.add_argument("--profile", action="store_true", help="Run smoke tests with timing output.")
     parser.add_argument(
+        "--tests",
+        action="append",
+        default=[],
+        help="Pass only these tests to test_start_work by name (comma-separated and repeatable).",
+    )
+    parser.add_argument(
+        "--list-tests",
+        action="store_true",
+        help="Print available test names from test_start_work and exit.",
+    )
+    parser.add_argument(
         "--skip-git-diff-check",
         action="store_true",
         help="Skip git whitespace/conflict-marker checks.",
     )
     args = parser.parse_args()
+
+    if args.list_tests:
+        run_step("list tests", [sys.executable, rel(SCRIPT_DIR / "test_start_work.py"), "--list-tests"])
+        return 0
+
+    has_mode = bool(args.ultra_fast or args.fast or args.quick)
+    if args.tests and has_mode:
+        raise SystemExit("--tests cannot be used with --ultra-fast/--fast/--quick.")
 
     run_step("compile scripts", [sys.executable, "-m", "py_compile", *python_scripts()])
     test_command = [sys.executable, rel(SCRIPT_DIR / "test_start_work.py")]
@@ -76,6 +106,9 @@ def main() -> int:
         test_command.append("--fast")
     elif args.quick:
         test_command.append("--quick")
+    if args.tests:
+        for name in split_test_names(args.tests):
+            test_command.extend(["--only", name])
     if args.profile:
         test_command.append("--profile")
     run_step("smoke tests", test_command)
