@@ -767,8 +767,8 @@ def test_trigger_eval_prompts_are_balanced(root: Path) -> None:
     assert any("$start-work" in row["prompt"] for row in rows if row["should_trigger"] == "true"), rows
     assert any("No multi-agent workflow needed" in row["prompt"] for row in rows if row["should_trigger"] == "false"), rows
     assert "prepare_trigger_eval_workspace.py --output-dir" in text, text
+    assert "next_commands" in text, text
     assert "run_trigger_eval_plan.py --plan" in text, text
-    assert "plan_trigger_evals.py --print-json" in text, text
     assert "score_trigger_evals.py --plan" in text, text
     assert "Expected behavior:" in text, text
 
@@ -808,6 +808,12 @@ def test_prepare_trigger_eval_workspace(root: Path) -> None:
     assert result["prompt_count"] == len(plan), result
     assert all(Path(item["artifact"]).parent == Path(result["artifact_dir"]) for item in plan), plan
     assert all(item["cwd"] == str(repo) for item in plan), plan
+    commands = result["next_commands"]
+    assert commands["dry_run"][-1] == "--dry-run", commands
+    assert commands["run"][commands["run"].index("--plan") + 1] == str(plan_path), commands
+    assert commands["score"][commands["score"].index("--plan") + 1] == str(plan_path), commands
+    assert commands["focused_run"][-2:] == ["--id", "<eval-id>"], commands
+    assert commands["focused_score"][-2:] == ["--id", "<eval-id>"], commands
 
 
 def test_trigger_eval_runner_respects_cwd_and_artifact(root: Path) -> None:

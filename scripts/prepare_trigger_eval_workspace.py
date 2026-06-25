@@ -34,6 +34,20 @@ PARSER_PY = """def parse(value):
 """
 
 
+def next_commands(plan_path: Path) -> dict[str, list[str]]:
+    runner = SCRIPT_DIR / "run_trigger_eval_plan.py"
+    scorer = SCRIPT_DIR / "score_trigger_evals.py"
+    base_run = [sys.executable, str(runner), "--plan", str(plan_path), "--print-json"]
+    base_score = [sys.executable, str(scorer), "--plan", str(plan_path), "--print-json"]
+    return {
+        "dry_run": [*base_run, "--dry-run"],
+        "run": base_run,
+        "score": base_score,
+        "focused_run": [*base_run, "--id", "<eval-id>"],
+        "focused_score": [*base_score, "--id", "<eval-id>"],
+    }
+
+
 def run_git(repo: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True)
 
@@ -80,6 +94,7 @@ def main() -> int:
         "repo": str(repo),
         "artifact_dir": str(artifact_dir),
         "plan": str(plan_path),
+        "next_commands": next_commands(plan_path),
         "prompt_count": len(plan),
     }
     if args.print_json:
@@ -88,6 +103,8 @@ def main() -> int:
         print(f"Fixture: {root}")
         print(f"Repo: {repo}")
         print(f"Plan: {plan_path}")
+        print(f"Dry run: {subprocess.list2cmdline(result['next_commands']['dry_run'])}")
+        print(f"Score: {subprocess.list2cmdline(result['next_commands']['score'])}")
         print(f"Prompts: {len(plan)}")
     return 0
 
