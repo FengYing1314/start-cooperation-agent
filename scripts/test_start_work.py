@@ -1312,6 +1312,90 @@ Manager checkpoint and send re-review if ready.
     fix_after_followup = json.loads(inspect_run(fix_run_dir).stdout)
     assert fix_after_followup["current_status"] == "main_integration_check", fix_after_followup
 
+    reviewer_fix_run = json.loads(
+        script(
+            INIT_RUN,
+            "--repo",
+            str(repo),
+            "--slug",
+            "inbound-reviewer-fix",
+            "--request",
+            "test inbound reviewer fix copy",
+            "--print-json",
+        ).stdout
+    )
+    reviewer_fix_run_dir = Path(str(reviewer_fix_run["run_dir"]))
+    for actor, to, thread_id, run_status, summary in [
+        ("M", "D1", "dev-thread", "manager_work_order", "work order recorded"),
+        ("M", "D1", "dev-thread", "developer_running", "work order sent"),
+        ("D1", "M", "manager-thread", "developer_done", "developer done"),
+        ("M", "", "", "main_integration_check", "manager checkpoint"),
+        ("M", "R1", "review-thread", "reviewer_running", "review request sent"),
+    ]:
+        append_status(
+            reviewer_fix_run_dir,
+            actor=actor,
+            to=to,
+            thread_id=thread_id,
+            run_status=run_status,
+            summary=summary,
+        )
+    reviewer_fix_payload = root / "reviewer-fix-copy.md"
+    reviewer_fix_payload.write_text(
+        """Start-work fix handoff R1-001
+Run ID: 20260101-000003-inbound-reviewer-fix
+Team ID: team-inbound
+From: R1
+To: D1
+Manager copy: M
+Status: changes required
+
+Blocking findings:
+Blank input still fails.
+
+Allowed fix scope:
+src/parser.py
+
+Do not change:
+Public API.
+
+Checks or evidence:
+python -m pytest tests/test_parser.py
+
+Requested next action:
+Fix only the blocking findings, then hand off to Manager for checkpoint.
+""",
+        encoding="utf-8",
+    )
+    reviewer_fix_recorded = json.loads(
+        script(
+            RECORD_INBOUND_HANDOFF,
+            "--run-dir",
+            str(reviewer_fix_run_dir),
+            "--kind",
+            "reviewer_fix",
+            "--body-file",
+            str(reviewer_fix_payload),
+            "--print-json",
+        ).stdout
+    )
+    assert reviewer_fix_recorded["ok"] is True, reviewer_fix_recorded
+    assert reviewer_fix_recorded["recorded_run_status"] == "review_done", reviewer_fix_recorded
+    assert reviewer_fix_recorded["event"]["thread_id"] == "dev-thread", reviewer_fix_recorded
+    assert reviewer_fix_recorded["followup_status_command"] == [], reviewer_fix_recorded
+    fix_commands = reviewer_fix_recorded["followup_status_commands"]
+    assert len(fix_commands) == 2, reviewer_fix_recorded
+    assert "fix_required" in fix_commands[0], reviewer_fix_recorded
+    assert "developer_fix_running" in fix_commands[1], reviewer_fix_recorded
+    reviewer_fix_inspected = json.loads(inspect_run(reviewer_fix_run_dir).stdout)
+    assert reviewer_fix_inspected["current_status"] == "review_done", reviewer_fix_inspected
+    required_followup = json.loads(run(fix_commands[0]).stdout)
+    assert required_followup["run_status"] == "fix_required", required_followup
+    running_followup = json.loads(run(fix_commands[1]).stdout)
+    assert running_followup["run_status"] == "developer_fix_running", running_followup
+    reviewer_fix_after_followup = json.loads(inspect_run(reviewer_fix_run_dir).stdout)
+    assert reviewer_fix_after_followup["current_status"] == "developer_fix_running", reviewer_fix_after_followup
+
     accepted_run = json.loads(
         script(
             INIT_RUN,

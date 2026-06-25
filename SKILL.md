@@ -55,7 +55,7 @@ After receiving a direct Codex App thread handoff from Developer or Reviewer, re
 python3 <skill-dir>/scripts/record_inbound_handoff.py --run-dir <run-dir> --kind <inbound-kind> --body-file <payload.md> --print-json
 ```
 
-Inbound kinds: `developer_completion`, `developer_fix_completion`, `reviewer_accepted`.
+Inbound kinds: `developer_completion`, `developer_fix_completion`, `reviewer_fix`, `reviewer_accepted`. `reviewer_fix` records the Manager copy of an R1 -> D1 blocking fix handoff; follow its returned commands in order only after the direct D1 send is known to have happened.
 
 For other received or manually relayed handoffs, validate the exact payload when practical:
 

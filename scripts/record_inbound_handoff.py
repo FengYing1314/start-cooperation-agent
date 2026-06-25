@@ -37,6 +37,34 @@ INBOUND = {
         "followup_status": "main_integration_check",
         "followup_summary": "post-fix integration check complete",
     },
+    "reviewer_fix": {
+        "actor": "R1",
+        "to": "D1",
+        "summary": "reviewer fix copy received",
+        "status_map": {
+            "changes required": "review_done",
+        },
+        "next_action": (
+            "Manager should record the blocking decision, then run followup_status_commands "
+            "in order after confirming this Manager copy represents a real D1 handoff."
+        ),
+        "followup_statuses": [
+            {
+                "actor": "R1",
+                "to": "D1",
+                "thread_role": "D1",
+                "status": "fix_required",
+                "summary": "blocking findings require fixes",
+            },
+            {
+                "actor": "R1",
+                "to": "D1",
+                "thread_role": "D1",
+                "status": "developer_fix_running",
+                "summary": "blocking fix request sent",
+            },
+        ],
+    },
     "reviewer_accepted": {
         "actor": "R1",
         "to": "M",
@@ -91,25 +119,55 @@ def roster_thread_id(run_dir: Path, role: str) -> str:
     return thread_id
 
 
-def followup_status_command(run_dir: Path, spec: dict[str, Any]) -> list[str]:
+def followup_status_items(spec: dict[str, Any]) -> list[dict[str, str]]:
+    items = spec.get("followup_statuses", [])
+    if isinstance(items, list) and items:
+        return [item for item in items if isinstance(item, dict)]
     status = str(spec.get("followup_status", ""))
     if not status:
         return []
     return [
-        sys.executable,
-        str(APPEND_EVENT),
-        "--run-dir",
-        str(run_dir),
-        "--kind",
-        "status",
-        "--actor",
-        "M",
-        "--summary",
-        str(spec.get("followup_summary", status)),
-        "--run-status",
-        status,
-        "--print-json",
+        {
+            "actor": "M",
+            "to": "",
+            "thread_role": "",
+            "status": status,
+            "summary": str(spec.get("followup_summary", status)),
+        }
     ]
+
+
+def followup_status_commands(run_dir: Path, spec: dict[str, Any]) -> list[list[str]]:
+    commands: list[list[str]] = []
+    for item in followup_status_items(spec):
+        status = str(item.get("status", ""))
+        if not status:
+            continue
+        actor = str(item.get("actor", "M") or "M")
+        to = str(item.get("to", ""))
+        thread_role = str(item.get("thread_role", ""))
+        thread_id = roster_thread_id(run_dir, thread_role) if thread_role else ""
+        command = [
+            sys.executable,
+            str(APPEND_EVENT),
+            "--run-dir",
+            str(run_dir),
+            "--kind",
+            "status",
+            "--actor",
+            actor,
+            "--summary",
+            str(item.get("summary", status)),
+            "--run-status",
+            status,
+            "--print-json",
+        ]
+        if to:
+            command.extend(["--to", to])
+        if thread_id:
+            command.extend(["--thread-id", thread_id])
+        commands.append(command)
+    return commands
 
 
 def record(args: argparse.Namespace) -> dict[str, Any]:
@@ -181,9 +239,9 @@ def record(args: argparse.Namespace) -> dict[str, Any]:
         event_args.extend(["--msg-id", msg_id])
 
     event = append_event(event_args)
-    followup = followup_status_command(run_dir, spec)
+    followups = followup_status_commands(run_dir, spec)
     next_actions = [spec["next_action"]]
-    if not followup and run_status == "blocked":
+    if not followups and run_status == "blocked":
         next_actions = ["Report the blocker and stop the loop until the blocking condition changes."]
     return {
         "ok": True,
@@ -192,7 +250,8 @@ def record(args: argparse.Namespace) -> dict[str, Any]:
         "validation": validation,
         "event": event,
         "recorded_run_status": run_status,
-        "followup_status_command": followup,
+        "followup_status_command": followups[0] if len(followups) == 1 else [],
+        "followup_status_commands": followups,
         "next_actions": next_actions,
     }
 
