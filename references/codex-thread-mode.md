@@ -2,6 +2,17 @@
 
 Use Codex thread mode when the project should keep an independent, reusable Manager/Developer/Reviewer collaboration history.
 
+## Contents
+
+- Tool discovery
+- Project selection
+- Team initialization
+- Roster rules
+- Task messaging
+- Event-driven route
+- Manager checkpoint
+- Replacement and archiving
+
 ## Tool Discovery
 
 If thread tools are not visible, call `tool_search` for:
