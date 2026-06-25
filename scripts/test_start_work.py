@@ -815,6 +815,7 @@ def test_trigger_eval_runner_respects_cwd_and_artifact(root: Path) -> None:
     repo = root / "runner-repo"
     repo.mkdir()
     artifact = root / "artifacts" / "runner-01.jsonl"
+    skipped_artifact = root / "artifacts" / "runner-02.jsonl"
     plan_path = root / "runner-plan.json"
     code = (
         "import json, os; "
@@ -831,6 +832,15 @@ def test_trigger_eval_runner_respects_cwd_and_artifact(root: Path) -> None:
                     "artifact": str(artifact),
                     "cwd": str(repo),
                     "command": [sys.executable, "-c", code],
+                },
+                {
+                    "id": "runner-02",
+                    "should_trigger": False,
+                    "focus": "runner",
+                    "prompt": "skipped prompt",
+                    "artifact": str(skipped_artifact),
+                    "cwd": str(repo),
+                    "command": [sys.executable, "-c", code],
                 }
             ],
             ensure_ascii=False,
@@ -840,16 +850,55 @@ def test_trigger_eval_runner_respects_cwd_and_artifact(root: Path) -> None:
         encoding="utf-8",
     )
 
-    dry = json.loads(script(RUN_TRIGGER_EVAL_PLAN, "--plan", str(plan_path), "--dry-run", "--print-json").stdout)
+    dry = json.loads(
+        script(RUN_TRIGGER_EVAL_PLAN, "--plan", str(plan_path), "--id", "runner-01", "--dry-run", "--print-json").stdout
+    )
     assert dry["ok"] is True, dry
+    assert dry["plan_total"] == 2, dry
+    assert dry["total"] == 1, dry
+    assert dry["selected_ids"] == ["runner-01"], dry
     assert dry["results"][0]["cwd"] == str(repo.resolve()), dry
     assert not artifact.exists(), artifact
 
-    ran = json.loads(script(RUN_TRIGGER_EVAL_PLAN, "--plan", str(plan_path), "--print-json").stdout)
+    ran = json.loads(script(RUN_TRIGGER_EVAL_PLAN, "--plan", str(plan_path), "--id", "runner-01", "--print-json").stdout)
     assert ran["ok"] is True, ran
     event = json.loads(artifact.read_text(encoding="utf-8"))
     assert event["cwd"] == str(repo.resolve()), event
     assert event["observed_trigger"] is False, event
+    assert not skipped_artifact.exists(), skipped_artifact
+
+    timeout_plan = root / "timeout-plan.json"
+    timeout_artifact = root / "artifacts" / "timeout.jsonl"
+    timeout_plan.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "timeout-01",
+                    "artifact": str(timeout_artifact),
+                    "cwd": str(repo),
+                    "command": [sys.executable, "-c", "import time; time.sleep(2)"],
+                }
+            ],
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    timed_out = script(
+        RUN_TRIGGER_EVAL_PLAN,
+        "--plan",
+        str(timeout_plan),
+        "--timeout-seconds",
+        "0.1",
+        "--print-json",
+        check=False,
+    )
+    assert timed_out.returncode != 0, timed_out.stdout
+    timed_out_summary = json.loads(timed_out.stdout)
+    assert timed_out_summary["ok"] is False, timed_out_summary
+    assert timed_out_summary["results"][0]["timeout"] is True, timed_out_summary
+    assert timed_out_summary["results"][0]["returncode"] is None, timed_out_summary
 
 
 def test_trigger_eval_score_reads_jsonl_artifacts(root: Path) -> None:

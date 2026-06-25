@@ -32,7 +32,13 @@ def command_parts(value: Any) -> list[str]:
     return value
 
 
-def run_item(item: dict[str, Any], *, plan_dir: Path, dry_run: bool) -> dict[str, Any]:
+def run_item(
+    item: dict[str, Any],
+    *,
+    plan_dir: Path,
+    dry_run: bool,
+    timeout_seconds: float | None,
+) -> dict[str, Any]:
     item_id = str(item.get("id", ""))
     command = command_parts(item.get("command"))
     artifact = resolve_from(plan_dir, str(item.get("artifact", "")))
@@ -50,6 +56,7 @@ def run_item(item: dict[str, Any], *, plan_dir: Path, dry_run: bool) -> dict[str
         "artifact": str(artifact),
         "command": command,
         "dry_run": dry_run,
+        "timeout_seconds": timeout_seconds,
     }
     if dry_run:
         result["returncode"] = 0
@@ -57,18 +64,42 @@ def run_item(item: dict[str, Any], *, plan_dir: Path, dry_run: bool) -> dict[str
 
     artifact.parent.mkdir(parents=True, exist_ok=True)
     with artifact.open("w", encoding="utf-8") as stdout:
-        proc = subprocess.run(
-            command,
-            cwd=str(cwd) if cwd else None,
-            stdout=stdout,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=False,
-        )
+        try:
+            proc = subprocess.run(
+                command,
+                cwd=str(cwd) if cwd else None,
+                stdout=stdout,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            result["returncode"] = None
+            result["timeout"] = True
+            if exc.stderr:
+                result["stderr_tail"] = stderr_tail(str(exc.stderr))
+            return result
     result["returncode"] = proc.returncode
     if proc.stderr:
         result["stderr_tail"] = stderr_tail(proc.stderr)
     return result
+
+
+def select_items(raw_plan: list[Any], requested_ids: list[str]) -> list[Any]:
+    if not requested_ids:
+        return raw_plan
+    requested = set(requested_ids)
+    selected = [
+        item
+        for item in raw_plan
+        if isinstance(item, dict) and str(item.get("id", "")) in requested
+    ]
+    found = {str(item.get("id", "")) for item in selected if isinstance(item, dict)}
+    missing = sorted(requested - found)
+    if missing:
+        raise SystemExit(f"Requested eval id not found: {', '.join(missing)}")
+    return selected
 
 
 def run_plan(args: argparse.Namespace) -> dict[str, Any]:
@@ -77,16 +108,23 @@ def run_plan(args: argparse.Namespace) -> dict[str, Any]:
     raw_plan = json.loads(plan_path.read_text(encoding="utf-8"))
     if not isinstance(raw_plan, list):
         raise SystemExit("Plan file must contain a JSON array.")
+    selected_plan = select_items(raw_plan, args.id)
+    timeout_seconds = None if args.timeout_seconds <= 0 else args.timeout_seconds
 
     results = []
-    for item in raw_plan:
+    for item in selected_plan:
         if not isinstance(item, dict):
             results.append({"ok": False, "error": "plan item must be an object"})
             if not args.continue_on_error:
                 break
             continue
         try:
-            result = run_item(item, plan_dir=plan_dir, dry_run=args.dry_run)
+            result = run_item(
+                item,
+                plan_dir=plan_dir,
+                dry_run=args.dry_run,
+                timeout_seconds=timeout_seconds,
+            )
             result["ok"] = result["returncode"] == 0
         except (OSError, ValueError) as exc:
             result = {"id": str(item.get("id", "")), "ok": False, "error": str(exc)}
@@ -95,10 +133,13 @@ def run_plan(args: argparse.Namespace) -> dict[str, Any]:
             break
 
     return {
-        "ok": all(item.get("ok") for item in results) and len(results) == len(raw_plan),
+        "ok": all(item.get("ok") for item in results) and len(results) == len(selected_plan),
         "plan": str(plan_path),
         "dry_run": args.dry_run,
-        "total": len(raw_plan),
+        "timeout_seconds": timeout_seconds,
+        "selected_ids": args.id,
+        "plan_total": len(raw_plan),
+        "total": len(selected_plan),
         "completed": len(results),
         "failed": sum(1 for item in results if not item.get("ok")),
         "results": results,
@@ -119,8 +160,15 @@ def print_text(summary: dict[str, Any]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", required=True, help="Path to trigger-eval-plan.json.")
+    parser.add_argument("--id", action="append", default=[], help="Run only this eval id. Repeatable.")
     parser.add_argument("--dry-run", action="store_true", help="Validate and report commands without executing them.")
     parser.add_argument("--continue-on-error", action="store_true", help="Run remaining items after a failure.")
+    parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=1800.0,
+        help="Per-item timeout. Use 0 to disable. Defaults to 1800 seconds.",
+    )
     parser.add_argument("--print-json", action="store_true", help="Print machine-readable run summary.")
     args = parser.parse_args()
 
