@@ -42,6 +42,8 @@ Changed files:
 
 Developer summary:
 
+Evidence references:
+
 Reviewer rules:
 - Stay read-only.
 - Review integrated repository state.
@@ -57,6 +59,7 @@ Blocking findings:
 Non-blocking findings:
 Checks reviewed:
 Suggested additional checks:
+Evidence references:
 Residual risk:
 Next handoff sent:
 Handoff payload if not sent:
@@ -79,7 +82,7 @@ Allowed fix scope:
 
 Do not change:
 
-Checks or evidence:
+Evidence references:
 
 Requested next action:
 Fix only the blocking findings, then hand off to Manager for checkpoint.
@@ -104,6 +107,8 @@ Changed files:
 
 Checks run:
 
+Evidence references:
+
 Remaining risk:
 
 Requested next action:
@@ -126,6 +131,8 @@ Status: accepted
 Accepted scope:
 
 Checks reviewed:
+
+Evidence references:
 
 Non-blocking findings:
 

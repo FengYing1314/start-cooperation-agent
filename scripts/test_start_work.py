@@ -881,6 +881,7 @@ Developer response format:
 Status: complete | blocked
 Changed files:
 Checks run:
+Evidence references:
 Next handoff sent:
 """,
         encoding="utf-8",
@@ -897,6 +898,55 @@ Next handoff sent:
     )
     assert good["ok"] is True, good
     assert any("Send the validated work order" in item for item in good["next_actions"]), good
+
+    good_review = root / "good-review-request.md"
+    good_review.write_text(
+        """Start-work review request M-002
+Run ID: 20260101-000001-test
+Team ID: team-001
+From: M
+To: R1
+Developer Thread: dev-thread
+Reviewer Thread: review-thread
+Project Path: C:/repo
+
+User goal:
+Fix the parser error.
+
+Acceptance criteria:
+Parser handles blank input.
+
+Review scope:
+src/parser.py
+
+Manager checkpoint:
+Diff inspected; tests passed.
+
+Changed files:
+src/parser.py
+
+Developer summary:
+Parser now handles blank input.
+
+Evidence references:
+python -m pytest tests/test_parser.py
+
+Reviewer report format:
+Conclusion: accepted | changes required | blocked
+""",
+        encoding="utf-8",
+    )
+    good_review_summary = json.loads(
+        script(
+            VALIDATE_HANDOFF,
+            "--kind",
+            "review_request",
+            "--body-file",
+            str(good_review),
+            "--print-json",
+        ).stdout
+    )
+    assert good_review_summary["ok"] is True, good_review_summary
 
     bad_payload = root / "bad-work-order.md"
     bad_payload.write_text(
@@ -960,6 +1010,9 @@ src/parser.py
 Checks:
 python -m pytest tests/test_parser.py
 
+Evidence references:
+tests/test_parser.py
+
 Requested next action:
 Manager checkpoint.
 
@@ -983,6 +1036,48 @@ maybe, Manager thread manager-thread.
         "Next handoff sent must start with yes or no" in problem
         for problem in bad_completion_summary["problems"]
     ), bad_completion_summary
+
+    missing_evidence = root / "developer-completion-missing-evidence.md"
+    missing_evidence.write_text(
+        """Start-work handoff D1-002
+Run ID: 20260101-000001-test
+Team ID: team-001
+From: D1
+To: M
+Status: complete
+
+Summary:
+Done.
+
+Changed files:
+src/parser.py
+
+Checks:
+python -m pytest tests/test_parser.py
+
+Requested next action:
+Manager checkpoint.
+
+Next handoff sent:
+yes, Manager thread manager-thread.
+""",
+        encoding="utf-8",
+    )
+    missing_evidence_proc = script(
+        VALIDATE_HANDOFF,
+        "--kind",
+        "developer_completion",
+        "--body-file",
+        str(missing_evidence),
+        "--print-json",
+        check=False,
+    )
+    assert missing_evidence_proc.returncode != 0, missing_evidence_proc.stdout
+    missing_evidence_summary = json.loads(missing_evidence_proc.stdout)
+    assert any(
+        "Missing required label: Evidence references" in problem
+        for problem in missing_evidence_summary["problems"]
+    ), missing_evidence_summary
 
 
 def test_prepare_outbound_handoff_records_and_routes(root: Path) -> None:
@@ -1056,6 +1151,7 @@ Status: complete | blocked
 Changed files:
 Implementation summary:
 Checks run:
+Evidence references:
 Next handoff sent:
 """,
         encoding="utf-8",
@@ -1313,6 +1409,9 @@ src/parser.py
 Checks:
 python -m pytest tests/test_parser.py
 
+Evidence references:
+tests/test_parser.py
+
 Scope changes requested:
 none
 
@@ -1397,6 +1496,9 @@ src/parser.py
 Checks run:
 python -m pytest tests/test_parser.py
 
+Evidence references:
+tests/test_parser.py
+
 Remaining risk:
 none
 
@@ -1477,7 +1579,7 @@ src/parser.py
 Do not change:
 Public API.
 
-Checks or evidence:
+Evidence references:
 python -m pytest tests/test_parser.py
 
 Requested next action:
@@ -1568,7 +1670,7 @@ src/parser.py
 Do not change:
 Public API.
 
-Checks or evidence:
+Evidence references:
 python -m pytest tests/test_parser.py
 
 Requested next action:
@@ -1738,6 +1840,9 @@ Parser fix.
 
 Checks reviewed:
 python -m pytest tests/test_parser.py
+
+Evidence references:
+tests/test_parser.py
 
 Non-blocking findings:
 none

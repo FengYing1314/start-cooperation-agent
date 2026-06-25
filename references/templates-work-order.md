@@ -56,6 +56,7 @@ Changed files:
 Implementation summary:
 Checks run:
 Checks not run:
+Evidence references:
 Risks or follow-ups:
 Scope changes requested:
 Next handoff sent:
@@ -78,6 +79,8 @@ Summary:
 Changed files:
 
 Checks:
+
+Evidence references:
 
 Scope changes requested:
 
