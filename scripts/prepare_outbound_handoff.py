@@ -16,6 +16,7 @@ from validate_handoff import extract_label, validate_payload
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 APPEND_EVENT = SCRIPT_DIR / "append_event.py"
+FINALIZE_OUTBOUND_HANDOFF = SCRIPT_DIR / "finalize_outbound_handoff.py"
 
 OUTBOUND = {
     "work_order": {
@@ -25,7 +26,7 @@ OUTBOUND = {
         "summary": "work order ready",
         "post_send_status": "developer_running",
         "post_send_summary": "work order sent",
-        "next_action": "Send the recorded work order to D1 with send_message_to_thread, then run post_send_status_command only after the send succeeds.",
+        "next_action": "Send the recorded work order to D1 with send_message_to_thread, then run finalize_sent_command only after the send succeeds.",
     },
     "review_request": {
         "actor": "M",
@@ -34,7 +35,7 @@ OUTBOUND = {
         "summary": "review request ready",
         "post_send_status": "reviewer_running",
         "post_send_summary": "review request sent",
-        "next_action": "Send the recorded review request to R1 with send_message_to_thread, then run post_send_status_command only after the send succeeds.",
+        "next_action": "Send the recorded review request to R1 with send_message_to_thread, then run finalize_sent_command only after the send succeeds.",
     },
     "reviewer_fix": {
         "actor": "R1",
@@ -43,7 +44,7 @@ OUTBOUND = {
         "summary": "blocking fix request ready",
         "post_send_status": "developer_fix_running",
         "post_send_summary": "blocking fix request sent",
-        "next_action": "Send the recorded fix request to D1 and a separate Manager copy, then run post_send_status_command only after the D1 send succeeds.",
+        "next_action": "Send the recorded fix request to D1 and a separate Manager copy, then run finalize_sent_command only after the D1 send succeeds.",
     },
 }
 
@@ -127,6 +128,25 @@ def post_send_status_command(run_dir: Path, spec: dict[str, str], thread_id: str
     ]
 
 
+def finalize_command(run_dir: Path, kind: str, event_id: str, result: str) -> list[str]:
+    command = [
+        sys.executable,
+        str(FINALIZE_OUTBOUND_HANDOFF),
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        kind,
+        "--event-id",
+        event_id,
+        "--result",
+        result,
+        "--print-json",
+    ]
+    if result == "failed":
+        command.extend(["--error", "<send error>"])
+    return command
+
+
 def prepare(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = Path(args.run_dir).expanduser().resolve()
     if not run_dir.is_dir():
@@ -195,9 +215,11 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
         "payload_file": payload_file,
         "post_send_status": spec["post_send_status"],
         "post_send_status_command": post_send_status_command(run_dir, spec, thread_id),
+        "finalize_sent_command": finalize_command(run_dir, args.kind, str(event.get("id", "")), "sent"),
+        "finalize_failed_command": finalize_command(run_dir, args.kind, str(event.get("id", "")), "failed"),
         "next_actions": [
             spec["next_action"],
-            "If send_message_to_thread fails, record a blocker event and do not run post_send_status_command.",
+            "If send_message_to_thread fails, run finalize_failed_command and do not advance the run status.",
         ],
     }
 

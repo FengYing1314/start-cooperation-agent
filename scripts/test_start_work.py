@@ -17,6 +17,7 @@ ACK_TEAM = SCRIPT_DIR / "ack_team.py"
 INIT_RUN = SCRIPT_DIR / "init_run.py"
 APPEND_EVENT = SCRIPT_DIR / "append_event.py"
 PREPARE_OUTBOUND_HANDOFF = SCRIPT_DIR / "prepare_outbound_handoff.py"
+FINALIZE_OUTBOUND_HANDOFF = SCRIPT_DIR / "finalize_outbound_handoff.py"
 INSPECT_TEAM = SCRIPT_DIR / "inspect_team.py"
 INSPECT_RUN = SCRIPT_DIR / "inspect_run.py"
 INSPECT_PROJECT = SCRIPT_DIR / "inspect_project.py"
@@ -714,6 +715,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "inspect_run.py" in skill, skill
     assert "inspect_project.py" in skill, skill
     assert "prepare_outbound_handoff.py" in skill, skill
+    assert "finalize_outbound_handoff.py" in skill, skill
     assert "validate_handoff.py" in skill, skill
     assert "reviewer_accepted" in skill, skill
     assert "check_trigger_eval_cli.py" in skill, skill
@@ -760,6 +762,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     protocol = (SKILL_ROOT / "references" / "protocol.md").read_text(encoding="utf-8")
     assert "scripts/start_work_contract.py" in protocol, protocol
     assert "prepare_outbound_handoff.py" in protocol, protocol
+    assert "finalize_outbound_handoff.py" in protocol, protocol
     assert "validate_handoff.py" in protocol, protocol
     assert "## Mode-Specific Transport" in protocol, protocol
     assert "Direct codex-thread route" in protocol, protocol
@@ -881,6 +884,7 @@ Status: complete | blocked
 
 def test_prepare_outbound_handoff_records_and_routes(root: Path) -> None:
     assert PREPARE_OUTBOUND_HANDOFF.exists(), PREPARE_OUTBOUND_HANDOFF
+    assert FINALIZE_OUTBOUND_HANDOFF.exists(), FINALIZE_OUTBOUND_HANDOFF
     repo = make_repo(root, "prepare-outbound")
     init_team(
         repo,
@@ -960,10 +964,50 @@ Next handoff sent:
     assert prepared["event"]["file"].replace("\\", "/") == "messages/M-001-work-order-ready.md", prepared
     assert Path(prepared["payload_file"]).exists(), prepared
     assert "developer_running" in prepared["post_send_status_command"], prepared
+    assert "finalize_outbound_handoff.py" in prepared["finalize_sent_command"][1], prepared
+    assert "sent" in prepared["finalize_sent_command"], prepared
+    assert "failed" in prepared["finalize_failed_command"], prepared
     assert any("send_message_to_thread" in item for item in prepared["next_actions"]), prepared
     inspected = json.loads(inspect_run(run_dir).stdout)
     assert inspected["current_status"] == "manager_work_order", inspected
     assert inspected["event_count"] == 1, inspected
+
+    finalized = json.loads(
+        script(
+            FINALIZE_OUTBOUND_HANDOFF,
+            "--run-dir",
+            str(run_dir),
+            "--kind",
+            "work_order",
+            "--event-id",
+            "M-001",
+            "--result",
+            "sent",
+            "--print-json",
+        ).stdout
+    )
+    assert finalized["ok"] is True, finalized
+    assert finalized["send_result"] == "sent", finalized
+    assert finalized["result_event"]["run_status"] == "developer_running", finalized
+    sent_inspected = json.loads(inspect_run(run_dir).stdout)
+    assert sent_inspected["current_status"] == "developer_running", sent_inspected
+    assert sent_inspected["event_count"] == 2, sent_inspected
+
+    duplicate_finalize = script(
+        FINALIZE_OUTBOUND_HANDOFF,
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        "work_order",
+        "--event-id",
+        "M-001",
+        "--result",
+        "sent",
+        "--print-json",
+        check=False,
+    )
+    assert duplicate_finalize.returncode != 0, duplicate_finalize.stdout + duplicate_finalize.stderr
+    assert "already finalized" in (duplicate_finalize.stdout + duplicate_finalize.stderr), duplicate_finalize.stdout
 
     bad_run = json.loads(
         script(
@@ -1024,6 +1068,56 @@ Status: complete | blocked
     assert any("Unresolved placeholder" in problem for problem in failed_summary["problems"]), failed_summary
     bad_inspected = json.loads(inspect_run(bad_run_dir).stdout)
     assert bad_inspected["event_count"] == 0, bad_inspected
+
+    failed_run = json.loads(
+        script(
+            INIT_RUN,
+            "--repo",
+            str(repo),
+            "--slug",
+            "prepare-send-failed",
+            "--request",
+            "test failed outbound send finalization",
+            "--print-json",
+        ).stdout
+    )
+    failed_run_dir = Path(str(failed_run["run_dir"]))
+    prepared_failed = json.loads(
+        script(
+            PREPARE_OUTBOUND_HANDOFF,
+            "--run-dir",
+            str(failed_run_dir),
+            "--kind",
+            "work_order",
+            "--body-file",
+            str(payload),
+            "--print-json",
+        ).stdout
+    )
+    assert prepared_failed["ok"] is True, prepared_failed
+    failed_finalized = json.loads(
+        script(
+            FINALIZE_OUTBOUND_HANDOFF,
+            "--run-dir",
+            str(failed_run_dir),
+            "--kind",
+            "work_order",
+            "--event-id",
+            "M-001",
+            "--result",
+            "failed",
+            "--error",
+            "tool unavailable",
+            "--print-json",
+        ).stdout
+    )
+    assert failed_finalized["ok"] is True, failed_finalized
+    assert failed_finalized["send_result"] == "failed", failed_finalized
+    assert failed_finalized["result_event"]["kind"] == "blocker", failed_finalized
+    assert failed_finalized["result_event"]["run_status"] == "", failed_finalized
+    failed_inspected = json.loads(inspect_run(failed_run_dir).stdout)
+    assert failed_inspected["current_status"] == "manager_work_order", failed_inspected
+    assert failed_inspected["event_count"] == 2, failed_inspected
 
 
 def parse_markdown_table(text: str) -> list[dict[str, str]]:

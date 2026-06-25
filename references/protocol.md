@@ -84,7 +84,9 @@ Use `scripts/init_run.py` to create a run. In `codex-thread` mode it must read `
 
 The JSON result includes `next_commands` and `next_actions`; use them to inspect the run, prepare the work-order payload, and only advance to a direct-send running status after a real thread message succeeds.
 
-Use `scripts/prepare_outbound_handoff.py --run-dir <run-dir> --kind <outbound-kind> --body-file <payload.md> --print-json` before sending outbound work orders, review requests, or reviewer fix handoffs. It validates the exact payload, records it in the ledger, resolves the roster target thread id, and returns LLM-readable `next_actions` plus a post-send status command.
+Use `scripts/prepare_outbound_handoff.py --run-dir <run-dir> --kind <outbound-kind> --body-file <payload.md> --print-json` before sending outbound work orders, review requests, or reviewer fix handoffs. It validates the exact payload, records it in the ledger, resolves the roster target thread id, and returns LLM-readable `next_actions` plus finalize commands for sent or failed delivery.
+
+Use `scripts/finalize_outbound_handoff.py --run-dir <run-dir> --kind <outbound-kind> --event-id <event-id> --result sent --print-json` only after the thread message really sends. Use `--result failed --error "<send error>"` after a real send failure; it records a blocker and does not advance the run status.
 
 Use `scripts/validate_handoff.py --kind <handoff-kind> --body-file <payload.md> --print-json` for received or manually relayed work orders, review requests, fix requests, completions, or acceptance payloads when practical. It checks required labels, role direction, allowed status values, unresolved placeholders, and returns LLM-readable `next_actions`.
 
@@ -184,8 +186,8 @@ Direct send sequence:
 1. Compose the handoff payload from the matching template.
 2. Run prepare_outbound_handoff.py for outbound handoffs, or validate_handoff.py for received/manual-relay payloads.
 3. Send the prepared payload file to the returned roster target with send_message_to_thread.
-4. If sending succeeds, run the returned post-send status command to append `developer_running`, `reviewer_running`, or `developer_fix_running`.
-5. If sending fails, record a blocker event with the unsent target and payload location and do not advance the run status.
+4. If sending succeeds, run the returned finalize_sent_command to append `developer_running`, `reviewer_running`, or `developer_fix_running`.
+5. If sending fails, run the returned finalize_failed_command to record a blocker with the unsent target and payload location; do not advance the run status.
 ```
 
 ## Message Ids
