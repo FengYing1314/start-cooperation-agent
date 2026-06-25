@@ -150,7 +150,7 @@ def next_actions(
     if codex_thread_ready:
         return [
             "Start direct codex-thread runs with init_run.py.",
-            "Use send_message_to_thread for roster targets; do not rely on Manager polling.",
+            "Use send_message_to_thread for roster targets with prompt set to the exact handoff contents; do not rely on Manager polling.",
         ]
     if manual_relay_ready:
         return [

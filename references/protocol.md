@@ -100,7 +100,7 @@ Use `scripts/validate_handoff.py --kind <handoff-kind> --body-file <payload.md> 
 
 Use `scripts/inspect_run.py --run-dir <run-dir> --print-json` before resuming or auditing a run. It reports `ok`, current status, next allowed statuses, last event, ledger consistency problems, and LLM-readable `next_actions`.
 
-When `inspect_run.py` or `inspect_project.py` reports `pending_outbound`, resume by sending that exact `payload_file` to `send_to_thread_id`, then run `finalize_sent_command` or `finalize_failed_command`. Do not prepare a duplicate handoff until the pending send has a recorded outcome.
+When `inspect_run.py` or `inspect_project.py` reports `pending_outbound`, resume by reading that exact `payload_file` and calling `send_message_to_thread` with `threadId=<send_to_thread_id>` and `prompt=<exact file contents>`, then run `finalize_sent_command` or `finalize_failed_command`. Do not send only the file path, and do not prepare a duplicate handoff until the pending send has a recorded outcome.
 
 In `subagent` or `single-agent` mode, `init_run.py` can create a run without an initialized team, but `--fallback-reason` is required and must explain why the long-lived thread team is not being used.
 
@@ -194,7 +194,7 @@ Direct send sequence:
 1. Compose the handoff payload from the matching template.
 2. Run prepare_outbound_handoff.py for Manager-originated outbound handoffs, or validate_handoff.py for received/manual-relay payloads.
 3. If resuming and inspect_run.py reports pending_outbound, reuse that payload instead of preparing a duplicate.
-4. Send the prepared payload file to the returned roster target with send_message_to_thread.
+4. Read the prepared payload file and send its exact contents to the returned roster target with send_message_to_thread.
 5. If sending succeeds, run the returned finalize_sent_command to append `developer_running` or `reviewer_running`.
 6. If sending fails, run the returned finalize_failed_command to record a blocker with the unsent target and payload location; do not advance the run status.
 ```

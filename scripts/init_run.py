@@ -395,7 +395,7 @@ def next_actions(mode: str) -> list[str]:
     if mode == "codex-thread":
         actions.extend(
             [
-                "Send prepare_work_order's payload_file to D1 with send_message_to_thread.",
+                "Read prepare_work_order's payload_file and send its exact contents to D1 with send_message_to_thread.",
                 "After the send succeeds, run prepare_work_order's finalize_sent_command; if it fails, run finalize_failed_command.",
             ]
         )

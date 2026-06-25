@@ -26,7 +26,7 @@ OUTBOUND = {
         "summary": "work order ready",
         "post_send_status": "developer_running",
         "post_send_summary": "work order sent",
-        "next_action": "Send the recorded work order to D1 with send_message_to_thread, then run finalize_sent_command only after the send succeeds.",
+        "next_action": "Read payload_file and call send_message_to_thread with threadId=send_to_thread_id and prompt set to the exact file contents; then run finalize_sent_command only after the send succeeds.",
     },
     "review_request": {
         "actor": "M",
@@ -35,7 +35,7 @@ OUTBOUND = {
         "summary": "review request ready",
         "post_send_status": "reviewer_running",
         "post_send_summary": "review request sent",
-        "next_action": "Send the recorded review request to R1 with send_message_to_thread, then run finalize_sent_command only after the send succeeds.",
+        "next_action": "Read payload_file and call send_message_to_thread with threadId=send_to_thread_id and prompt set to the exact file contents; then run finalize_sent_command only after the send succeeds.",
     },
 }
 
@@ -204,12 +204,18 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
         "send_to": spec["to"],
         "send_to_thread_id": thread_id,
         "payload_file": payload_file,
+        "send_message_to_thread": {
+            "threadId": thread_id,
+            "prompt_file": payload_file,
+            "prompt_instruction": "Read prompt_file as UTF-8 and pass its exact contents as prompt; do not send only the file path.",
+        },
         "post_send_status": spec["post_send_status"],
         "post_send_status_command": post_send_status_command(run_dir, spec, thread_id),
         "finalize_sent_command": finalize_command(run_dir, args.kind, str(event.get("id", "")), "sent"),
         "finalize_failed_command": finalize_command(run_dir, args.kind, str(event.get("id", "")), "failed"),
         "next_actions": [
             spec["next_action"],
+            "Do not pass the payload_file path as the prompt; pass the file contents.",
             "If send_message_to_thread fails, run finalize_failed_command and do not advance the run status.",
         ],
     }

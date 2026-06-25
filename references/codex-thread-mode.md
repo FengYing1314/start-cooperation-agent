@@ -80,8 +80,8 @@ SW Team <team-id> R1 Reviewer
 After creating or confirming threads:
 
 1. Record Manager, Developer, and Reviewer targets with `scripts/init_team.py`.
-2. Send `team/standing-developer.md` directly to Developer with `send_message_to_thread`.
-3. Send `team/standing-reviewer.md` directly to Reviewer with `send_message_to_thread`.
+2. Read `team/standing-developer.md` and send its exact contents directly to Developer with `send_message_to_thread`.
+3. Read `team/standing-reviewer.md` and send its exact contents directly to Reviewer with `send_message_to_thread`.
 4. Require both agents to send a direct acknowledgement back to Manager.
 5. Record acknowledgements with `scripts/ack_team.py --role D1` and `scripts/ack_team.py --role R1`.
 
@@ -111,7 +111,7 @@ Normal transport is direct thread messaging, not Manager reading other agent thr
 
 Treat thread messages as the transport layer and the run ledger as the recovery layer. Important payloads must be persisted under the run `messages/` directory so a later Manager can resume without relying on another thread's visible history.
 
-Manager outbound prompts should be prepared with `scripts/prepare_outbound_handoff.py`, sent with `send_message_to_thread`, then finalized with `scripts/finalize_outbound_handoff.py`. Developer and Reviewer must not edit Manager-owned ledgers; they include enough message metadata for Manager to record the received handoff with `scripts/record_inbound_handoff.py`.
+Manager outbound prompts should be prepared with `scripts/prepare_outbound_handoff.py`, sent with `send_message_to_thread`, then finalized with `scripts/finalize_outbound_handoff.py`. The current Codex App send tool takes `threadId` and `prompt`; read the prepared `payload_file` as UTF-8 and pass its exact contents as `prompt`. Do not pass only the file path. Developer and Reviewer must not edit Manager-owned ledgers; they include enough message metadata for Manager to record the received handoff with `scripts/record_inbound_handoff.py`.
 
 Manager send sequence:
 
@@ -119,7 +119,7 @@ Manager send sequence:
 1. Write the exact outbound payload from `references/templates-work-order.md` for Developer work or `references/templates-review.md` for Reviewer work.
 2. Run `scripts/prepare_outbound_handoff.py --kind work_order` or `--kind review_request` with that payload.
 3. If resuming and `inspect_run.py` reports `pending_outbound`, reuse that payload instead of preparing a duplicate.
-4. Call `send_message_to_thread` with the returned `send_to_thread_id` and `payload_file`.
+4. Call `send_message_to_thread` with `threadId=<send_to_thread_id>` and `prompt=<exact contents of payload_file>`.
 5. If the send succeeds, run the returned `finalize_sent_command`.
 6. If the send fails, run the returned `finalize_failed_command` with the concrete send error; do not advance to the next run status.
 ```

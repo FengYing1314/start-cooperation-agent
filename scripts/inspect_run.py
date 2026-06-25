@@ -21,7 +21,7 @@ OUTBOUND_RESUME = {
         "current_status": "manager_work_order",
         "record_status": "manager_work_order",
         "post_send_status": "developer_running",
-        "send_action": "Send the payload to D1 with send_message_to_thread.",
+        "send_action": "Read payload_file and send its exact contents to D1 with send_message_to_thread.",
     },
     "review_request": {
         "actor": "M",
@@ -29,7 +29,7 @@ OUTBOUND_RESUME = {
         "current_status": "main_integration_check",
         "record_status": "",
         "post_send_status": "reviewer_running",
-        "send_action": "Send the payload to R1 with send_message_to_thread.",
+        "send_action": "Read payload_file and send its exact contents to R1 with send_message_to_thread.",
     },
 }
 
@@ -212,6 +212,11 @@ def find_pending_outbound(
                     "send_to": spec["to"],
                     "send_to_thread_id": thread_id,
                     "payload_file": str(run_dir / file_name) if file_name else "",
+                    "send_message_to_thread": {
+                        "threadId": thread_id,
+                        "prompt_file": str(run_dir / file_name) if file_name else "",
+                        "prompt_instruction": "Read prompt_file as UTF-8 and pass its exact contents as prompt; do not send only the file path.",
+                    },
                     "post_send_status": spec["post_send_status"],
                     "send_action": spec["send_action"],
                     "finalize_sent_command": finalize_command(run_dir, kind, event_id, "sent"),
@@ -237,7 +242,8 @@ def next_actions(
         payload_file = str(pending_outbound.get("payload_file", "")).strip() or "the recorded payload"
         return [
             f"Pending outbound {pending_outbound.get('kind', '')} {pending_outbound.get('event_id', '')}: {pending_outbound.get('send_action', '')}",
-            f"Use payload file: {payload_file}",
+            f"Use payload file contents as send_message_to_thread.prompt: {payload_file}",
+            "Do not send only the payload_file path.",
             "After send_message_to_thread succeeds, run pending_outbound.finalize_sent_command.",
             "If send_message_to_thread fails, run pending_outbound.finalize_failed_command with a concrete --error value.",
         ]
@@ -249,7 +255,7 @@ def next_actions(
     if current_status == "manager_work_order":
         return [
             "If pending_outbound is missing, prepare the work order with prepare_outbound_handoff.py --kind work_order.",
-            "Send the prepared payload_file to D1 with send_message_to_thread, then run finalize_sent_command or finalize_failed_command.",
+            "Read the prepared payload_file and send its exact contents to D1 with send_message_to_thread, then run finalize_sent_command or finalize_failed_command.",
         ]
     if current_status == "developer_running":
         return [

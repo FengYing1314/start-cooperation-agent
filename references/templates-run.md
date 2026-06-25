@@ -21,7 +21,7 @@ For direct thread sends:
 
 1. Write the outbound payload to a run `messages/` file.
 2. Record it with `scripts/append_event.py --kind message --actor <sender> --to <target> --body-file <payload>`.
-3. Call `send_message_to_thread` with the recipient thread id and the same payload.
+3. Call `send_message_to_thread` with the recipient thread id and `prompt` set to the exact payload text, not the file path.
 4. Append `developer_running`, `reviewer_running`, or `developer_fix_running` only after the send succeeds.
 5. If the send fails, record a blocker event and do not advance the run status.
 

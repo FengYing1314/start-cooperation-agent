@@ -161,6 +161,7 @@ def test_team_inspection_requires_acknowledgements(root: Path) -> None:
     assert team_commands["ack_reviewer"][-3:] == ["--role", "R1", "--print-json"], team_commands
     assert team_commands["init_run"][1].endswith("init_run.py"), team_commands
     assert any("standing-developer.md" in item for item in team_result["next_actions"]), team_result
+    assert any("send_message_to_thread.prompt" in item for item in team_result["next_actions"]), team_result
     for name in ("standing-developer.md", "standing-reviewer.md"):
         standing_text = (repo / ".agent-work" / "start-work" / "team" / name).read_text(encoding="utf-8")
         assert "Handoff payload contract:" in standing_text, standing_text
@@ -188,6 +189,7 @@ def test_team_inspection_requires_acknowledgements(root: Path) -> None:
     assert ready["handoff_route_valid"] is True, ready
     assert ready["handoff_route_count"] == 5, ready
     assert any("Start direct codex-thread runs" in action for action in ready["next_actions"]), ready
+    assert any("exact handoff contents" in action for action in ready["next_actions"]), ready
 
 
 def test_team_inspection_rejects_broken_handoff_route(root: Path) -> None:
@@ -783,6 +785,8 @@ def test_reference_routing_is_progressive(root: Path) -> None:
 
     codex_thread = (SKILL_ROOT / "references" / "codex-thread-mode.md").read_text(encoding="utf-8")
     assert "send_message_to_thread" in codex_thread, codex_thread
+    assert "threadId=<send_to_thread_id>" in codex_thread, codex_thread
+    assert "prompt=<exact contents of payload_file>" in codex_thread, codex_thread
     assert "prepare_outbound_handoff.py" in codex_thread, codex_thread
     assert "finalize_outbound_handoff.py" in codex_thread, codex_thread
     assert "pending_outbound" in codex_thread, codex_thread
@@ -1178,11 +1182,15 @@ Next handoff sent:
     assert prepared["event"]["run_status"] == "manager_work_order", prepared
     assert prepared["event"]["file"].replace("\\", "/") == "messages/M-001-work-order-ready.md", prepared
     assert Path(prepared["payload_file"]).exists(), prepared
+    assert prepared["send_message_to_thread"]["threadId"] == "dev-thread", prepared
+    assert prepared["send_message_to_thread"]["prompt_file"] == prepared["payload_file"], prepared
+    assert "do not send only the file path" in prepared["send_message_to_thread"]["prompt_instruction"], prepared
     assert "developer_running" in prepared["post_send_status_command"], prepared
     assert "finalize_outbound_handoff.py" in prepared["finalize_sent_command"][1], prepared
     assert "sent" in prepared["finalize_sent_command"], prepared
     assert "failed" in prepared["finalize_failed_command"], prepared
     assert any("send_message_to_thread" in item for item in prepared["next_actions"]), prepared
+    assert any("Do not pass the payload_file path as the prompt" in item for item in prepared["next_actions"]), prepared
     inspected = json.loads(inspect_run(run_dir).stdout)
     assert inspected["current_status"] == "manager_work_order", inspected
     assert inspected["event_count"] == 1, inspected
@@ -1192,10 +1200,13 @@ Next handoff sent:
     assert pending["send_to"] == "D1", inspected
     assert pending["send_to_thread_id"] == "dev-thread", inspected
     assert pending["payload_file"].replace("\\", "/").endswith("messages/M-001-work-order-ready.md"), inspected
+    assert pending["send_message_to_thread"]["threadId"] == "dev-thread", inspected
+    assert pending["send_message_to_thread"]["prompt_file"] == pending["payload_file"], inspected
     assert "finalize_outbound_handoff.py" in pending["finalize_sent_command"][1], inspected
     assert "sent" in pending["finalize_sent_command"], inspected
     assert "failed" in pending["finalize_failed_command"], inspected
     assert any("Pending outbound work_order M-001" in item for item in inspected["next_actions"]), inspected
+    assert any("Do not send only the payload_file path" in item for item in inspected["next_actions"]), inspected
 
     finalized = json.loads(
         script(

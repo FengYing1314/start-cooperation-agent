@@ -372,7 +372,7 @@ def next_actions(team: dict[str, object], update_written: bool) -> list[str]:
         ]
     if not team.get("acknowledgements_complete"):
         actions = [
-            "Send standing-developer.md to D1 and standing-reviewer.md to R1 using the roster targets.",
+            "Read standing-developer.md and standing-reviewer.md, then send each file's exact contents as send_message_to_thread.prompt to the roster target thread.",
             "After each role replies with the roster acknowledgement, run ack_developer and ack_reviewer.",
             "Run inspect_team before starting a task run.",
         ]

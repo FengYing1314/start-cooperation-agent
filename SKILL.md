@@ -40,7 +40,7 @@ Keep handoff messages short. Put bulky logs, diffs, traces, screenshots, or repo
 
 When a script returns `next_commands` or `next_actions`, follow those structured hints instead of reconstructing equivalent commands from prose.
 
-If `inspect_run.py` or `inspect_project.py` returns `pending_outbound`, finish that exact send first: send `pending_outbound.payload_file` to `pending_outbound.send_to_thread_id`, then run the returned finalize command for success or failure. Do not compose a replacement payload unless the pending send is explicitly failed or obsolete.
+If `inspect_run.py` or `inspect_project.py` returns `pending_outbound`, finish that exact send first: read `pending_outbound.payload_file`, call `send_message_to_thread` with `threadId=pending_outbound.send_to_thread_id` and `prompt=<exact file contents>`, then run the returned finalize command for success or failure. Do not send only the file path as the prompt, and do not compose a replacement payload unless the pending send is explicitly failed or obsolete.
 
 Before Manager sends an outbound work order or review request, use the prepare/finalize helpers:
 
@@ -123,7 +123,7 @@ python3 <skill-dir>/scripts/inspect_run.py --run-dir <run-dir> --print-json
 ```
 
 3. Manager writes the work order with goal, non-goals, ownership, acceptance criteria, and checks.
-4. In direct `codex-thread` mode, Manager prepares the outbound work order with `prepare_outbound_handoff.py`, sends the returned payload file directly to Developer with `send_message_to_thread`, then runs the returned `finalize_sent_command` after the send succeeds or `finalize_failed_command` after send failure.
+4. In direct `codex-thread` mode, Manager prepares the outbound work order with `prepare_outbound_handoff.py`, reads the returned payload file, sends its exact contents directly to Developer with `send_message_to_thread`, then runs the returned `finalize_sent_command` after the send succeeds or `finalize_failed_command` after send failure.
 5. Developer implements and returns the completion handoff through the roster target: direct message to Manager in direct mode, or exact payload plus target for callback/manual relay or fallback mode. Manager records the received payload with `record_inbound_handoff.py`.
 6. Manager performs the integration checkpoint: inspect diff, run or record checks, then prepares the review-ready package with `prepare_outbound_handoff.py`, sends the returned payload file directly to Reviewer in direct mode, then runs the returned finalize command for success or failure.
 7. Reviewer either accepts through the roster target, or sends blocking fix handoffs directly to Developer with a separate Manager copy or payload for relay when needed.
