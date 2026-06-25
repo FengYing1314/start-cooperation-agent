@@ -18,6 +18,7 @@ INIT_RUN = SCRIPT_DIR / "init_run.py"
 APPEND_EVENT = SCRIPT_DIR / "append_event.py"
 PREPARE_OUTBOUND_HANDOFF = SCRIPT_DIR / "prepare_outbound_handoff.py"
 FINALIZE_OUTBOUND_HANDOFF = SCRIPT_DIR / "finalize_outbound_handoff.py"
+RECORD_INBOUND_HANDOFF = SCRIPT_DIR / "record_inbound_handoff.py"
 INSPECT_TEAM = SCRIPT_DIR / "inspect_team.py"
 INSPECT_RUN = SCRIPT_DIR / "inspect_run.py"
 INSPECT_PROJECT = SCRIPT_DIR / "inspect_project.py"
@@ -716,6 +717,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "inspect_project.py" in skill, skill
     assert "prepare_outbound_handoff.py" in skill, skill
     assert "finalize_outbound_handoff.py" in skill, skill
+    assert "record_inbound_handoff.py" in skill, skill
     assert "validate_handoff.py" in skill, skill
     assert "reviewer_accepted" in skill, skill
     assert "check_trigger_eval_cli.py" in skill, skill
@@ -763,6 +765,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "scripts/start_work_contract.py" in protocol, protocol
     assert "prepare_outbound_handoff.py" in protocol, protocol
     assert "finalize_outbound_handoff.py" in protocol, protocol
+    assert "record_inbound_handoff.py" in protocol, protocol
     assert "validate_handoff.py" in protocol, protocol
     assert "## Mode-Specific Transport" in protocol, protocol
     assert "Direct codex-thread route" in protocol, protocol
@@ -1118,6 +1121,256 @@ Status: complete | blocked
     failed_inspected = json.loads(inspect_run(failed_run_dir).stdout)
     assert failed_inspected["current_status"] == "manager_work_order", failed_inspected
     assert failed_inspected["event_count"] == 2, failed_inspected
+
+
+def test_record_inbound_handoff_records_received_payloads(root: Path) -> None:
+    assert RECORD_INBOUND_HANDOFF.exists(), RECORD_INBOUND_HANDOFF
+    repo = make_repo(root, "record-inbound")
+    init_team(
+        repo,
+        "--manager-thread-id",
+        "manager-thread",
+        "--developer-thread-id",
+        "dev-thread",
+        "--reviewer-thread-id",
+        "review-thread",
+    )
+    ack(repo, "D1")
+    ack(repo, "R1")
+    run_data = json.loads(
+        script(
+            INIT_RUN,
+            "--repo",
+            str(repo),
+            "--slug",
+            "inbound",
+            "--request",
+            "test inbound handoff recording",
+            "--print-json",
+        ).stdout
+    )
+    run_dir = Path(str(run_data["run_dir"]))
+    append_status(
+        run_dir,
+        actor="M",
+        to="D1",
+        thread_id="dev-thread",
+        run_status="manager_work_order",
+        summary="work order recorded",
+    )
+    append_status(
+        run_dir,
+        actor="M",
+        to="D1",
+        thread_id="dev-thread",
+        run_status="developer_running",
+        summary="work order sent",
+    )
+    completion = root / "developer-completion.md"
+    completion.write_text(
+        """Start-work handoff D1-001
+Run ID: 20260101-000001-inbound
+Team ID: team-inbound
+From: D1
+To: M
+Manager copy: n/a
+Status: complete
+
+Summary:
+Implementation complete.
+
+Changed files:
+src/parser.py
+
+Checks:
+python -m pytest tests/test_parser.py
+
+Scope changes requested:
+none
+
+Blocking issues:
+none
+
+Requested next action:
+Manager checkpoint and send to Reviewer if ready.
+""",
+        encoding="utf-8",
+    )
+    recorded = json.loads(
+        script(
+            RECORD_INBOUND_HANDOFF,
+            "--run-dir",
+            str(run_dir),
+            "--kind",
+            "developer_completion",
+            "--body-file",
+            str(completion),
+            "--print-json",
+        ).stdout
+    )
+    assert recorded["ok"] is True, recorded
+    assert recorded["event"]["id"] == "D1-001", recorded
+    assert recorded["event"]["actor"] == "D1", recorded
+    assert recorded["event"]["to"] == "M", recorded
+    assert recorded["event"]["thread_id"] == "manager-thread", recorded
+    assert recorded["recorded_run_status"] == "developer_done", recorded
+    inspected = json.loads(inspect_run(run_dir).stdout)
+    assert inspected["current_status"] == "developer_done", inspected
+
+    fix_run = json.loads(
+        script(
+            INIT_RUN,
+            "--repo",
+            str(repo),
+            "--slug",
+            "inbound-fix",
+            "--request",
+            "test inbound fix completion",
+            "--print-json",
+        ).stdout
+    )
+    fix_run_dir = Path(str(fix_run["run_dir"]))
+    for actor, to, thread_id, run_status, summary in [
+        ("M", "D1", "dev-thread", "manager_work_order", "work order recorded"),
+        ("M", "D1", "dev-thread", "developer_running", "work order sent"),
+        ("D1", "M", "manager-thread", "developer_done", "developer done"),
+        ("M", "", "", "main_integration_check", "manager checkpoint"),
+        ("M", "R1", "review-thread", "reviewer_running", "review request sent"),
+        ("R1", "M", "manager-thread", "review_done", "review done"),
+        ("R1", "D1", "dev-thread", "fix_required", "fix required"),
+        ("R1", "D1", "dev-thread", "developer_fix_running", "fix request sent"),
+    ]:
+        append_status(
+            fix_run_dir,
+            actor=actor,
+            to=to,
+            thread_id=thread_id,
+            run_status=run_status,
+            summary=summary,
+        )
+    fix_completion = root / "developer-fix-completion.md"
+    fix_completion.write_text(
+        """Start-work fix completion D1-002
+Run ID: 20260101-000002-inbound-fix
+Team ID: team-inbound
+From: D1
+To: M
+Status: complete
+
+Fixed findings:
+Handled blank input.
+
+Changed files:
+src/parser.py
+
+Checks run:
+python -m pytest tests/test_parser.py
+
+Remaining risk:
+none
+
+Requested next action:
+Manager checkpoint and send re-review if ready.
+""",
+        encoding="utf-8",
+    )
+    fix_recorded = json.loads(
+        script(
+            RECORD_INBOUND_HANDOFF,
+            "--run-dir",
+            str(fix_run_dir),
+            "--kind",
+            "developer_fix_completion",
+            "--body-file",
+            str(fix_completion),
+            "--print-json",
+        ).stdout
+    )
+    assert fix_recorded["ok"] is True, fix_recorded
+    assert fix_recorded["recorded_run_status"] == "", fix_recorded
+    assert "main_integration_check" in fix_recorded["followup_status_command"], fix_recorded
+    fix_inspected = json.loads(inspect_run(fix_run_dir).stdout)
+    assert fix_inspected["current_status"] == "developer_fix_running", fix_inspected
+    fix_followup = json.loads(run(fix_recorded["followup_status_command"]).stdout)
+    assert fix_followup["run_status"] == "main_integration_check", fix_followup
+    fix_after_followup = json.loads(inspect_run(fix_run_dir).stdout)
+    assert fix_after_followup["current_status"] == "main_integration_check", fix_after_followup
+
+    accepted_run = json.loads(
+        script(
+            INIT_RUN,
+            "--repo",
+            str(repo),
+            "--slug",
+            "inbound-accepted",
+            "--request",
+            "test inbound reviewer accepted",
+            "--print-json",
+        ).stdout
+    )
+    accepted_run_dir = Path(str(accepted_run["run_dir"]))
+    for actor, to, thread_id, run_status, summary in [
+        ("M", "D1", "dev-thread", "manager_work_order", "work order recorded"),
+        ("M", "D1", "dev-thread", "developer_running", "work order sent"),
+        ("D1", "M", "manager-thread", "developer_done", "developer done"),
+        ("M", "", "", "main_integration_check", "manager checkpoint"),
+        ("M", "R1", "review-thread", "reviewer_running", "review request sent"),
+    ]:
+        append_status(
+            accepted_run_dir,
+            actor=actor,
+            to=to,
+            thread_id=thread_id,
+            run_status=run_status,
+            summary=summary,
+        )
+    accepted_payload = root / "reviewer-accepted.md"
+    accepted_payload.write_text(
+        """Start-work review result R1-001
+Run ID: 20260101-000003-inbound-accepted
+Team ID: team-inbound
+From: R1
+To: M
+Status: accepted
+
+Accepted scope:
+Parser fix.
+
+Checks reviewed:
+python -m pytest tests/test_parser.py
+
+Non-blocking findings:
+none
+
+Residual risk:
+none
+
+Requested next action:
+Manager final delivery.
+""",
+        encoding="utf-8",
+    )
+    accepted_recorded = json.loads(
+        script(
+            RECORD_INBOUND_HANDOFF,
+            "--run-dir",
+            str(accepted_run_dir),
+            "--kind",
+            "reviewer_accepted",
+            "--body-file",
+            str(accepted_payload),
+            "--print-json",
+        ).stdout
+    )
+    assert accepted_recorded["ok"] is True, accepted_recorded
+    assert accepted_recorded["recorded_run_status"] == "review_done", accepted_recorded
+    assert "accepted" in accepted_recorded["followup_status_command"], accepted_recorded
+    accepted_inspected = json.loads(inspect_run(accepted_run_dir).stdout)
+    assert accepted_inspected["current_status"] == "review_done", accepted_inspected
+    accepted_followup = json.loads(run(accepted_recorded["followup_status_command"]).stdout)
+    assert accepted_followup["run_status"] == "accepted", accepted_followup
+    accepted_after_followup = json.loads(inspect_run(accepted_run_dir).stdout)
+    assert accepted_after_followup["current_status"] == "accepted", accepted_after_followup
 
 
 def parse_markdown_table(text: str) -> list[dict[str, str]]:
@@ -1648,6 +1901,7 @@ def main() -> int:
         test_reference_routing_is_progressive,
         test_handoff_payload_validation,
         test_prepare_outbound_handoff_records_and_routes,
+        test_record_inbound_handoff_records_received_payloads,
         test_trigger_eval_prompts_are_balanced,
         test_trigger_eval_cli_check_reports_launchability,
         test_trigger_eval_plan_is_stable,

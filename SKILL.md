@@ -47,7 +47,15 @@ python3 <skill-dir>/scripts/finalize_outbound_handoff.py --run-dir <run-dir> --k
 
 Outbound kinds: `work_order`, `review_request`, `reviewer_fix`.
 
-For received or manually relayed handoffs, validate the exact payload when practical:
+After receiving a direct Codex App thread handoff from Developer or Reviewer, record the exact payload:
+
+```bash
+python3 <skill-dir>/scripts/record_inbound_handoff.py --run-dir <run-dir> --kind <inbound-kind> --body-file <payload.md> --print-json
+```
+
+Inbound kinds: `developer_completion`, `developer_fix_completion`, `reviewer_accepted`.
+
+For other received or manually relayed handoffs, validate the exact payload when practical:
 
 ```bash
 python3 <skill-dir>/scripts/validate_handoff.py --kind <handoff-kind> --body-file <payload.md> --print-json
@@ -112,10 +120,10 @@ python3 <skill-dir>/scripts/inspect_run.py --run-dir <run-dir> --print-json
 
 3. Manager writes the work order with goal, non-goals, ownership, acceptance criteria, and checks.
 4. In direct `codex-thread` mode, Manager prepares the outbound work order with `prepare_outbound_handoff.py`, sends the returned payload file directly to Developer with `send_message_to_thread`, then runs the returned `finalize_sent_command` after the send succeeds or `finalize_failed_command` after send failure.
-5. Developer implements and returns the completion handoff through the roster target: direct message to Manager in direct mode, or exact payload plus target for callback/manual relay or fallback mode.
+5. Developer implements and returns the completion handoff through the roster target: direct message to Manager in direct mode, or exact payload plus target for callback/manual relay or fallback mode. Manager records the received payload with `record_inbound_handoff.py`.
 6. Manager performs the integration checkpoint: inspect diff, run or record checks, then prepares the review-ready package with `prepare_outbound_handoff.py`, sends the returned payload file directly to Reviewer in direct mode, then runs the returned finalize command for success or failure.
 7. Reviewer either accepts through the roster target, or sends blocking fix handoffs directly to Developer with a separate Manager copy or payload for relay when needed.
-8. Developer fixes and returns the fix completion through the roster target. Repeat until accepted, blocked, or stopped by the user.
+8. Developer fixes and returns the fix completion through the roster target. Manager records received completion or acceptance payloads with `record_inbound_handoff.py`. Repeat until accepted, blocked, or stopped by the user.
 9. Final response includes changes, checks, Reviewer result, risks, and the run ledger path.
 
 ## Mode Selection
@@ -141,4 +149,4 @@ For trigger behavior forward-tests, load `references/trigger-eval-prompts.md`, p
 
 `validate_start_work.py` compiles every local Python script, including `start_work_contract.py`, runs the smoke tests, and checks git whitespace/conflict markers when the skill is inside a git worktree.
 
-These checks cover stable team ids, team next-step hints, team readiness inspection, handoff route invariants, handoff payload validation, outbound handoff send preparation and finalization, project status inspection, project/run resume next-step hints, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, run next-step hints, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, trigger-eval prompt coverage, CLI launch checks, fixture preparation and artifact cleanup, trigger-eval step hints, dry-run planning, plan execution, UTF-8-safe runner failure artifacts, trace scoring, contract/documentation drift, progressive reference routing, and skill metadata validity.
+These checks cover stable team ids, team next-step hints, team readiness inspection, handoff route invariants, handoff payload validation, outbound handoff send preparation and finalization, inbound handoff recording, project status inspection, project/run resume next-step hints, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, run next-step hints, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, trigger-eval prompt coverage, CLI launch checks, fixture preparation and artifact cleanup, trigger-eval step hints, dry-run planning, plan execution, UTF-8-safe runner failure artifacts, trace scoring, contract/documentation drift, progressive reference routing, and skill metadata validity.
