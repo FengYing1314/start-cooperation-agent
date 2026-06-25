@@ -165,6 +165,7 @@ def test_team_inspection_requires_acknowledgements(root: Path) -> None:
     assert data["acknowledgements_complete"] is False, data
     assert data["codex_thread_ready"] is False, data
     assert any("D1 acknowledgement pending" in problem for problem in data["problems"]), data
+    assert any("ack_team.py" in action for action in data["next_actions"]), data
 
     ack(repo, "D1")
     ack(repo, "R1")
@@ -174,6 +175,7 @@ def test_team_inspection_requires_acknowledgements(root: Path) -> None:
     assert ready["manual_relay_ready"] is False, ready
     assert ready["handoff_route_valid"] is True, ready
     assert ready["handoff_route_count"] == 5, ready
+    assert any("Start direct codex-thread runs" in action for action in ready["next_actions"]), ready
 
 
 def test_team_inspection_rejects_broken_handoff_route(root: Path) -> None:
@@ -285,6 +287,8 @@ def test_callback_only_rejected_for_direct_thread_mode(root: Path) -> None:
     assert inspected["manual_relay_ready"] is True, inspected
     assert inspected["handoff_route_valid"] is True, inspected
     assert inspected["warnings"], inspected
+    assert any("do not start direct codex-thread runs" in action for action in inspected["next_actions"]), inspected
+    assert any("do not guess a thread id" in action for action in inspected["next_actions"]), inspected
 
     proc = script(
         INIT_RUN,
@@ -706,6 +710,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert not (SKILL_ROOT / "README.md").exists(), "README.md should not be in the skill package"
     assert "callback/manual relay fallback" in skill, skill
     assert "handoff route invariants" in skill, skill
+    assert "team readiness inspection" in skill, skill
     assert "structured run metadata" in skill, skill
     assert "next_commands" in skill, skill
     assert "next_actions" in skill, skill
@@ -760,6 +765,10 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "roster-routed" in openai_yaml, openai_yaml
     assert "callback/manual relay fallback" in openai_yaml, openai_yaml
     assert "direct-message development team" not in openai_yaml, openai_yaml
+
+    codex_thread = (SKILL_ROOT / "references" / "codex-thread-mode.md").read_text(encoding="utf-8")
+    assert "do not infer or guess" in codex_thread, codex_thread
+    assert "do not create a direct `codex-thread` run from a callback-only roster" in codex_thread, codex_thread
 
 
 def parse_markdown_table(text: str) -> list[dict[str, str]]:

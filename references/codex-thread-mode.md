@@ -30,6 +30,8 @@ Expected capabilities include:
 - `set_thread_title`
 - `set_thread_archived`
 
+If no tool exposes the current Manager thread id, do not infer or guess it. Use a user-provided exact thread id, a verified exact match, or record a Manager callback for manual relay fallback.
+
 If the tools remain unavailable, tell the user and ask before falling back to subagents.
 
 ## Project Selection
@@ -60,6 +62,8 @@ After creating or confirming threads:
 5. Record acknowledgements with `scripts/ack_team.py --role D1` and `scripts/ack_team.py --role R1`.
 
 Direct `codex-thread` runs require a Manager thread id. If the Manager thread id cannot be obtained, record a Manager callback only for manual relay fallback; do not create a direct `codex-thread` run from a callback-only roster.
+
+Do not use `list_threads` as a fuzzy way to choose the Manager thread. A listed thread may be stale or unrelated; use it only when the exact current Manager thread is known and verified.
 
 When falling back because thread tools are unavailable or the task is too small for a long-lived team, create the ledger with `scripts/init_run.py --mode subagent --fallback-reason "<reason>"` or `--mode single-agent --fallback-reason "<reason>"`.
 

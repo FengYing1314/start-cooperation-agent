@@ -138,6 +138,40 @@ def validate_handoff_route(
     return not missing
 
 
+def next_actions(
+    *,
+    problems: list[str],
+    codex_thread_ready: bool,
+    manual_relay_ready: bool,
+    manager_thread: str,
+    manager_callback: str,
+    acknowledgements_ready: bool,
+) -> list[str]:
+    if codex_thread_ready:
+        return [
+            "Start direct codex-thread runs with init_run.py.",
+            "Use send_message_to_thread for roster targets; do not rely on Manager polling.",
+        ]
+    if manual_relay_ready:
+        return [
+            "Use callback/manual relay only; do not start direct codex-thread runs until M.thread_id is recorded.",
+            "Record a real Manager thread id with init_team.py --manager-thread-id before enabling direct role-to-role handoffs back to Manager.",
+            "For direct sends to Manager, do not guess a thread id from list_threads unless it is exact and verified.",
+        ]
+    actions = []
+    if problems:
+        actions.append("Fix the listed team readiness problems before creating a codex-thread run.")
+    if not manager_thread and not manager_callback:
+        actions.append("Record either M.thread_id for direct mode or M.callback for manual relay fallback.")
+    elif not manager_thread:
+        actions.append("Record M.thread_id before direct codex-thread mode; callback-only Manager targets are manual relay fallback.")
+    if not acknowledgements_ready:
+        actions.append("Send standing instructions and record D1/R1 acknowledgements with ack_team.py.")
+    if not actions:
+        actions.append("Run inspect_team.py again after updating the roster.")
+    return actions
+
+
 def inspect_team(repo: Path) -> dict[str, object]:
     problems: list[str] = []
     warnings: list[str] = []
@@ -231,6 +265,14 @@ def inspect_team(repo: Path) -> dict[str, object]:
         "handoff_route_count": len(handoff_route),
         "warnings": warnings,
         "problems": problems,
+        "next_actions": next_actions(
+            problems=problems,
+            codex_thread_ready=codex_thread_ready,
+            manual_relay_ready=callback_ready,
+            manager_thread=manager_thread,
+            manager_callback=manager_callback,
+            acknowledgements_ready=acknowledgements_ready,
+        ),
     }
 
 
@@ -251,6 +293,11 @@ def print_text(summary: dict[str, object]) -> None:
         print("Problems:")
         for problem in problems:
             print(f"- {problem}")
+    next_action_items = summary.get("next_actions", [])
+    if isinstance(next_action_items, list) and next_action_items:
+        print("Next Actions:")
+        for action in next_action_items:
+            print(f"- {action}")
 
 
 def main() -> int:
