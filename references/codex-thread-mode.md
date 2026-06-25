@@ -32,6 +32,13 @@ Expected capabilities include:
 - `set_thread_title`
 - `set_thread_archived`
 
+Current Codex App thread tool shape:
+
+- `list_projects()` returns project ids for repo-scoped background threads.
+- `list_threads({query?, limit?})` is for exact lookup or audit, not normal handoff delivery.
+- `create_thread({prompt, target})` creates a separate user-owned thread. For project work, pass `target={type:"project", projectId, environment:{type:"local"}}` or an explicit worktree environment. Omit `model` and `thinking` unless the user explicitly requests overrides.
+- `send_message_to_thread({threadId, prompt})` sends a follow-up to an existing thread. Use the exact payload text as `prompt`; do not pass only a file path. Omit `model` and `thinking` unless the user explicitly requests overrides.
+
 If no tool exposes the current Manager thread id, do not infer or guess it. Use a user-provided exact thread id, a verified exact match, or record a Manager callback for manual relay fallback.
 
 If the tools remain unavailable, tell the user and ask before falling back to subagents.

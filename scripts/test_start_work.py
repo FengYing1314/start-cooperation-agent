@@ -799,6 +799,11 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "do not call `read_thread`" in codex_thread, codex_thread
     assert "list_projects" in codex_thread, codex_thread
     assert "list_threads" in codex_thread, codex_thread
+    assert "Current Codex App thread tool shape" in codex_thread, codex_thread
+    assert 'create_thread({prompt, target})' in codex_thread, codex_thread
+    assert 'target={type:"project", projectId, environment:{type:"local"}}' in codex_thread, codex_thread
+    assert "Omit `model` and `thinking` unless the user explicitly requests overrides" in codex_thread, codex_thread
+    assert "send_message_to_thread({threadId, prompt})" in codex_thread, codex_thread
     assert "readiness summary" in codex_thread, codex_thread
     assert "Codex CLI is not a substitute for Codex App thread transport" in codex_thread, codex_thread
     assert "do not use `codex exec`/`resume` as proof" in codex_thread, codex_thread
