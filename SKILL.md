@@ -38,6 +38,8 @@ Prefer generated `team/*.md` and run ledger files over hand-writing payloads.
 
 When a script returns `next_commands` or `next_actions`, follow those structured hints instead of reconstructing equivalent commands from prose.
 
+If `inspect_run.py` or `inspect_project.py` returns `pending_outbound`, finish that exact send first: send `pending_outbound.payload_file` to `pending_outbound.send_to_thread_id`, then run the returned finalize command for success or failure. Do not compose a replacement payload unless the pending send is explicitly failed or obsolete.
+
 Before sending an outbound work order, review request, or reviewer fix handoff, prefer the prepare/finalize helpers:
 
 ```bash

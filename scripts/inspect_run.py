@@ -10,6 +10,36 @@ from pathlib import Path
 
 from start_work_contract import RUN_STATUSES, current_run_status, next_allowed_statuses
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+FINALIZE_OUTBOUND_HANDOFF = SCRIPT_DIR / "finalize_outbound_handoff.py"
+
+OUTBOUND_RESUME = {
+    "work_order": {
+        "actor": "M",
+        "to": "D1",
+        "current_status": "manager_work_order",
+        "record_status": "manager_work_order",
+        "post_send_status": "developer_running",
+        "send_action": "Send the payload to D1 with send_message_to_thread.",
+    },
+    "review_request": {
+        "actor": "M",
+        "to": "R1",
+        "current_status": "main_integration_check",
+        "record_status": "",
+        "post_send_status": "reviewer_running",
+        "send_action": "Send the payload to R1 with send_message_to_thread.",
+    },
+    "reviewer_fix": {
+        "actor": "R1",
+        "to": "D1",
+        "current_status": "fix_required",
+        "record_status": "fix_required",
+        "post_send_status": "developer_fix_running",
+        "send_action": "Send the payload to D1 with send_message_to_thread and send a separate Manager copy.",
+    },
+}
+
 
 def load_json_object(path: Path, problems: list[str]) -> dict[str, object]:
     if not path.exists():
@@ -66,11 +96,108 @@ def latest_status_event(events: list[dict[str, object]]) -> dict[str, object] | 
     return None
 
 
-def next_actions(current_status: str, allowed: list[str], problems: list[str]) -> list[str]:
+def finalize_command(run_dir: Path, kind: str, event_id: str, result: str) -> list[str]:
+    command = [
+        sys.executable,
+        str(FINALIZE_OUTBOUND_HANDOFF),
+        "--run-dir",
+        str(run_dir),
+        "--kind",
+        kind,
+        "--event-id",
+        event_id,
+        "--result",
+        result,
+        "--print-json",
+    ]
+    if result == "failed":
+        command.extend(["--error", "<send error>"])
+    return command
+
+
+def outbound_finalized(
+    events: list[dict[str, object]],
+    start_index: int,
+    spec: dict[str, str],
+    thread_id: str,
+) -> bool:
+    for event in events[start_index + 1:]:
+        same_route = (
+            event.get("actor") == spec["actor"]
+            and event.get("to") == spec["to"]
+            and event.get("thread_id") == thread_id
+        )
+        if not same_route:
+            continue
+        if event.get("run_status") == spec["post_send_status"]:
+            return True
+        if event.get("kind") == "blocker":
+            return True
+    return False
+
+
+def find_pending_outbound(
+    run_dir: Path,
+    current_status: str,
+    events: list[dict[str, object]],
+) -> dict[str, object] | None:
+    candidates: list[dict[str, object]] = []
+    for kind, spec in OUTBOUND_RESUME.items():
+        if current_status != spec["current_status"]:
+            continue
+        for index, event in enumerate(events):
+            if event.get("kind") != "message":
+                continue
+            if event.get("actor") != spec["actor"] or event.get("to") != spec["to"]:
+                continue
+            record_status = spec["record_status"]
+            if record_status and event.get("run_status") != record_status:
+                continue
+            if not record_status and str(event.get("run_status", "")).strip():
+                continue
+            thread_id = str(event.get("thread_id", "")).strip()
+            if not thread_id:
+                continue
+            file_name = str(event.get("file", "")).strip()
+            if not file_name:
+                continue
+            if outbound_finalized(events, index, spec, thread_id):
+                continue
+            event_id = str(event.get("id", "")).strip()
+            candidates.append(
+                {
+                    "kind": kind,
+                    "event_id": event_id,
+                    "send_to": spec["to"],
+                    "send_to_thread_id": thread_id,
+                    "payload_file": str(run_dir / file_name) if file_name else "",
+                    "post_send_status": spec["post_send_status"],
+                    "send_action": spec["send_action"],
+                    "finalize_sent_command": finalize_command(run_dir, kind, event_id, "sent"),
+                    "finalize_failed_command": finalize_command(run_dir, kind, event_id, "failed"),
+                }
+            )
+    return candidates[-1] if candidates else None
+
+
+def next_actions(
+    current_status: str,
+    allowed: list[str],
+    problems: list[str],
+    pending_outbound: dict[str, object] | None,
+) -> list[str]:
     if problems:
         return [
             "Repair the listed ledger problems before appending more events.",
             "Use append_event.py --allow-status-jump only for explicit recovery or audit correction.",
+        ]
+    if pending_outbound:
+        payload_file = str(pending_outbound.get("payload_file", "")).strip() or "the recorded payload"
+        return [
+            f"Pending outbound {pending_outbound.get('kind', '')} {pending_outbound.get('event_id', '')}: {pending_outbound.get('send_action', '')}",
+            f"Use payload file: {payload_file}",
+            "After send_message_to_thread succeeds, run pending_outbound.finalize_sent_command.",
+            "If send_message_to_thread fails, run pending_outbound.finalize_failed_command with a concrete --error value.",
         ]
     if current_status == "init":
         return [
@@ -190,6 +317,7 @@ def inspect_run(run_dir: Path) -> dict[str, object]:
         problems.append(f"Latest status event mismatch: event={status_event_status}, current_status={current_status}")
 
     allowed = next_allowed_statuses(current_status)
+    pending_outbound = None if problems else find_pending_outbound(run_dir, current_status, events)
     return {
         "ok": not problems,
         "run_dir": str(run_dir),
@@ -203,8 +331,9 @@ def inspect_run(run_dir: Path) -> dict[str, object]:
         "metadata_event_count": metadata_event_count,
         "last_event": compact_event(last_event),
         "status_event": compact_event(status_event),
+        "pending_outbound": pending_outbound,
         "problems": problems,
-        "next_actions": next_actions(current_status, allowed, problems),
+        "next_actions": next_actions(current_status, allowed, problems, pending_outbound),
     }
 
 
@@ -219,6 +348,12 @@ def print_text(summary: dict[str, object]) -> None:
     last_event = summary.get("last_event")
     if isinstance(last_event, dict) and last_event.get("id"):
         print(f"Last Event: {last_event.get('id')} {last_event.get('summary')}")
+    pending_outbound = summary.get("pending_outbound")
+    if isinstance(pending_outbound, dict) and pending_outbound.get("event_id"):
+        print(
+            f"Pending Outbound: {pending_outbound.get('kind')} "
+            f"{pending_outbound.get('event_id')} -> {pending_outbound.get('send_to')}"
+        )
     problems = summary.get("problems", [])
     if isinstance(problems, list) and problems:
         print("Problems:")

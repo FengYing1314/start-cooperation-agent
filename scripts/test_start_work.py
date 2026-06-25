@@ -732,6 +732,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "structured run metadata" in skill, skill
     assert "next_commands" in skill, skill
     assert "next_actions" in skill, skill
+    assert "pending_outbound" in skill, skill
     assert "full fix-review loop progression" in skill, skill
 
     template_index = (SKILL_ROOT / "references" / "templates.md").read_text(encoding="utf-8")
@@ -779,6 +780,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "machine-readable run index" in protocol, protocol
     assert "next_commands" in protocol, protocol
     assert "next_actions" in protocol, protocol
+    assert "pending_outbound" in protocol, protocol
     assert "updates `run.json` with the current status and last event" in protocol, protocol
     assert "records both its event status and run status" in protocol, protocol
     assert "full fix-review loop as an executable invariant" in protocol, protocol
@@ -974,6 +976,16 @@ Next handoff sent:
     inspected = json.loads(inspect_run(run_dir).stdout)
     assert inspected["current_status"] == "manager_work_order", inspected
     assert inspected["event_count"] == 1, inspected
+    pending = inspected["pending_outbound"]
+    assert pending["kind"] == "work_order", inspected
+    assert pending["event_id"] == "M-001", inspected
+    assert pending["send_to"] == "D1", inspected
+    assert pending["send_to_thread_id"] == "dev-thread", inspected
+    assert pending["payload_file"].replace("\\", "/").endswith("messages/M-001-work-order-ready.md"), inspected
+    assert "finalize_outbound_handoff.py" in pending["finalize_sent_command"][1], inspected
+    assert "sent" in pending["finalize_sent_command"], inspected
+    assert "failed" in pending["finalize_failed_command"], inspected
+    assert any("Pending outbound work_order M-001" in item for item in inspected["next_actions"]), inspected
 
     finalized = json.loads(
         script(
@@ -995,6 +1007,7 @@ Next handoff sent:
     sent_inspected = json.loads(inspect_run(run_dir).stdout)
     assert sent_inspected["current_status"] == "developer_running", sent_inspected
     assert sent_inspected["event_count"] == 2, sent_inspected
+    assert sent_inspected["pending_outbound"] is None, sent_inspected
 
     duplicate_finalize = script(
         FINALIZE_OUTBOUND_HANDOFF,
@@ -1111,6 +1124,8 @@ Status: complete | blocked
             "failed",
             "--error",
             "tool unavailable",
+            "--summary",
+            "custom failure note",
             "--print-json",
         ).stdout
     )
@@ -1121,6 +1136,7 @@ Status: complete | blocked
     failed_inspected = json.loads(inspect_run(failed_run_dir).stdout)
     assert failed_inspected["current_status"] == "manager_work_order", failed_inspected
     assert failed_inspected["event_count"] == 2, failed_inspected
+    assert failed_inspected["pending_outbound"] is None, failed_inspected
 
 
 def test_record_inbound_handoff_records_received_payloads(root: Path) -> None:
