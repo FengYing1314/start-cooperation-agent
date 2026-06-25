@@ -93,17 +93,41 @@ def infer_trigger(path: Path, patterns: list[str]) -> tuple[bool | None, str, li
     return bool(matches), "heuristic", matches
 
 
-def score(args: argparse.Namespace) -> dict[str, object]:
-    plan = build_plan(
+def load_plan(args: argparse.Namespace) -> list[dict[str, Any]]:
+    if args.plan:
+        raw_plan = json.loads(Path(args.plan).expanduser().resolve().read_text(encoding="utf-8"))
+        if not isinstance(raw_plan, list):
+            raise SystemExit("Plan file must contain a JSON array.")
+        if not all(isinstance(item, dict) for item in raw_plan):
+            raise SystemExit("Plan items must be JSON objects.")
+        return raw_plan
+    return build_plan(
         SimpleNamespace(
             prompts=args.prompts,
             artifact_dir=args.artifact_dir,
             codex_bin=args.codex_bin,
         )
     )
+
+
+def select_items(plan: list[dict[str, Any]], requested_ids: list[str]) -> list[dict[str, Any]]:
+    if not requested_ids:
+        return plan
+    requested = set(requested_ids)
+    selected = [item for item in plan if str(item.get("id", "")) in requested]
+    found = {str(item.get("id", "")) for item in selected}
+    missing = sorted(requested - found)
+    if missing:
+        raise SystemExit(f"Requested eval id not found: {', '.join(missing)}")
+    return selected
+
+
+def score(args: argparse.Namespace) -> dict[str, object]:
+    plan = load_plan(args)
+    selected_plan = select_items(plan, args.id)
     patterns = args.trigger_pattern or DEFAULT_PATTERNS
     results = []
-    for item in plan:
+    for item in selected_plan:
         artifact = Path(str(item["artifact"]))
         observed, method, evidence = infer_trigger(artifact, patterns)
         expected = bool(item["should_trigger"])
@@ -123,6 +147,9 @@ def score(args: argparse.Namespace) -> dict[str, object]:
 
     return {
         "ok": all(item["passed"] for item in results),
+        "plan": str(Path(args.plan).expanduser().resolve()) if args.plan else "",
+        "selected_ids": args.id,
+        "plan_total": len(plan),
         "total": len(results),
         "passed": sum(1 for item in results if item["passed"]),
         "failed": sum(1 for item in results if not item["passed"]),
@@ -145,6 +172,8 @@ def print_text(summary: dict[str, object]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--plan", default="", help="Optional trigger-eval-plan.json to score directly.")
+    parser.add_argument("--id", action="append", default=[], help="Score only this eval id. Repeatable.")
     parser.add_argument("--prompts", default=str(DEFAULT_PROMPTS), help="Markdown trigger eval prompt table.")
     parser.add_argument(
         "--artifact-dir",

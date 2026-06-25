@@ -769,7 +769,7 @@ def test_trigger_eval_prompts_are_balanced(root: Path) -> None:
     assert "prepare_trigger_eval_workspace.py --output-dir" in text, text
     assert "run_trigger_eval_plan.py --plan" in text, text
     assert "plan_trigger_evals.py --print-json" in text, text
-    assert "score_trigger_evals.py --print-json" in text, text
+    assert "score_trigger_evals.py --plan" in text, text
     assert "Expected behavior:" in text, text
 
 
@@ -925,6 +925,33 @@ def test_trigger_eval_score_reads_jsonl_artifacts(root: Path) -> None:
     failed_summary = json.loads(failed.stdout)
     assert failed_summary["ok"] is False, failed_summary
     assert failed_summary["failed"] == 1, failed_summary
+
+    focused_artifact_dir = root / "focused-evals"
+    focused_plan = json.loads(
+        script(PLAN_TRIGGER_EVALS, "--artifact-dir", str(focused_artifact_dir), "--print-json").stdout
+    )
+    focused_plan_path = root / "focused-plan.json"
+    focused_plan_path.write_text(json.dumps(focused_plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    focused_item = focused_plan[0]
+    focused_artifact = Path(focused_item["artifact"])
+    focused_artifact.parent.mkdir(parents=True, exist_ok=True)
+    focused_artifact.write_text(json.dumps({"start_work_triggered": True}) + "\n", encoding="utf-8")
+
+    focused = json.loads(
+        script(
+            SCORE_TRIGGER_EVALS,
+            "--plan",
+            str(focused_plan_path),
+            "--id",
+            focused_item["id"],
+            "--print-json",
+        ).stdout
+    )
+    assert focused["ok"] is True, focused
+    assert focused["plan_total"] == len(focused_plan), focused
+    assert focused["total"] == 1, focused
+    assert focused["selected_ids"] == [focused_item["id"]], focused
+    assert focused["results"][0]["artifact"] == str(focused_artifact), focused
 
 
 def test_shared_contract_matches_generated_routes(root: Path) -> None:
