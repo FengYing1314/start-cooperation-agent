@@ -165,6 +165,8 @@ def test_team_inspection_requires_acknowledgements(root: Path) -> None:
         standing_text = (repo / ".agent-work" / "start-work" / "team" / name).read_text(encoding="utf-8")
         assert "Handoff payload contract:" in standing_text, standing_text
         assert "Every handoff you send or return must include local message id" in standing_text, standing_text
+        assert "`Evidence references:`" in standing_text, standing_text
+        assert "put bulky logs, diffs, traces, screenshots, or reports in run artifacts" in standing_text, standing_text
         assert "Next handoff sent:" in standing_text, standing_text
     proc = inspect_team(repo, check=False)
     combined = proc.stdout + proc.stderr

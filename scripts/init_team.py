@@ -286,7 +286,8 @@ Role rules:
 {role_rules}
 
 Handoff payload contract:
-- Every handoff you send or return must include local message id, run id, team id, From, To, status, summary, checks or evidence, and requested next action.
+- Every handoff you send or return must include local message id, run id, team id, From, To, status, summary, checks, `Evidence references:`, and requested next action.
+- Keep the handoff message short; put bulky logs, diffs, traces, screenshots, or reports in run artifacts and cite their paths, commands, or event ids under `Evidence references:`.
 - If a direct message is sent, set `Next handoff sent:` to `yes` and name the target thread.
 - If a direct message is not sent, set `Next handoff sent:` to `no` and include the exact unsent payload and target.
 

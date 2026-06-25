@@ -68,6 +68,7 @@ Changed files:
 Implementation summary:
 Checks run:
 Checks not run:
+Evidence references:
 Risks or follow-ups:
 Scope changes requested:
 Next handoff sent:
@@ -105,6 +106,7 @@ Blocking findings:
 Non-blocking findings:
 Checks reviewed:
 Suggested additional checks:
+Evidence references:
 Residual risk:
 Next handoff sent:
 Handoff payload if not sent:
@@ -122,6 +124,7 @@ Handoff payload if not sent:
 
 - Every role must honor the nearest project instructions.
 - Every role must treat pre-existing changes as user or other-agent work.
-- Every handoff must include run id, sender, receiver, status, summary, changed files or findings, checks, and requested next action.
+- Every handoff must include run id, sender, receiver, status, summary, changed files or findings, checks, `Evidence references:`, and requested next action.
+- Keep bulky logs, diffs, traces, screenshots, and reports in run artifacts; cite their paths, commands, or event ids under `Evidence references:`.
 - Every handoff sender must use the next roster target directly when thread messaging is available, or return the unsent payload and target when it is not.
 - Roster changes must be acknowledged before further handoffs.

@@ -64,7 +64,8 @@ Every standing instruction must include:
 - shared roster with Manager, Developer, and Reviewer targets;
 - default handoff route;
 - no-revert, no-history-rewrite, no-ledger-edit rules;
-- handoff payload contract: local message id, run id, team id, From, To, status, summary, checks or evidence, requested next action, and sent-or-unsent target;
+- handoff payload contract: local message id, run id, team id, From, To, status, summary, checks, `Evidence references:`, requested next action, and sent-or-unsent target;
+- instruction to keep bulky logs, diffs, traces, screenshots, and reports in run artifacts and cite paths, commands, or event ids under `Evidence references:`;
 - exact acknowledgement line: `ACK roster saved for <D1-or-R1>, team <team-id>.`
 
 Use the direct route only when `Manager Direct Handoff: true` and `M.thread_id` is present. Use callback/manual relay wording when Manager lacks a thread id.
