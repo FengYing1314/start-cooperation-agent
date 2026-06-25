@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -20,7 +21,9 @@ def rel(path: Path) -> str:
 def run_step(label: str, command: list[str]) -> None:
     print(f"== {label}", flush=True)
     print(" ".join(command), flush=True)
-    proc = subprocess.run(command, cwd=str(SKILL_ROOT), check=False)
+    env = os.environ.copy()
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    proc = subprocess.run(command, cwd=str(SKILL_ROOT), env=env, check=False)
     if proc.returncode != 0:
         raise SystemExit(proc.returncode)
 
@@ -45,12 +48,17 @@ def main() -> int:
     mode.add_argument(
         "--quick",
         action="store_true",
-        help="Run a fast validation subset suitable for iterative development.",
+        help="Run a concise fast subset for quick validation.",
     )
     mode.add_argument(
         "--fast",
         action="store_true",
-        help="Run the minimal validation subset for fastest iteration.",
+        help="Run a practical fast subset for iterative development.",
+    )
+    mode.add_argument(
+        "--ultra-fast",
+        action="store_true",
+        help="Run the smallest validation subset for very fast iteration.",
     )
     parser.add_argument(
         "--skip-git-diff-check",
@@ -61,10 +69,12 @@ def main() -> int:
 
     run_step("compile scripts", [sys.executable, "-m", "py_compile", *python_scripts()])
     test_command = [sys.executable, rel(SCRIPT_DIR / "test_start_work.py")]
-    if args.quick:
-        test_command.append("--quick")
+    if args.ultra_fast:
+        test_command.append("--ultra-fast")
     elif args.fast:
         test_command.append("--fast")
+    elif args.quick:
+        test_command.append("--quick")
     run_step("smoke tests", test_command)
 
     if args.skip_git_diff_check:

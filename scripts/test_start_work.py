@@ -2760,7 +2760,15 @@ FAST_TESTS = [
     test_project_inspection_guides_preflight_without_team,
     test_direct_thread_happy_path,
     test_handoff_payload_validation,
-    test_record_inbound_handoff_records_received_payloads,
+    test_protocol_status_docs_match_contract,
+]
+
+ULTRA_FAST_TESTS = [
+    test_team_id_is_stable,
+    test_team_inspection_requires_acknowledgements,
+    test_project_inspection_guides_preflight_without_team,
+    test_codex_thread_drill_plan_preserves_live_approval_gate,
+    test_direct_thread_happy_path,
     test_protocol_status_docs_match_contract,
 ]
 
@@ -2781,7 +2789,6 @@ QUICK_TESTS = [
     test_reference_routing_is_progressive,
     test_handoff_payload_validation,
     test_prepare_outbound_handoff_records_and_routes,
-    test_record_inbound_handoff_records_received_payloads,
     test_protocol_status_docs_match_contract,
 ]
 
@@ -2790,14 +2797,19 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
+        "--ultra-fast",
+        action="store_true",
+        help="Run the minimal smoke subset for the fastest iteration.",
+    )
+    mode.add_argument(
         "--fast",
         action="store_true",
-        help="Run a minimal fast subset for rapid iteration.",
+        help="Run a concise fast subset for iterative development.",
     )
     mode.add_argument(
         "--quick",
         action="store_true",
-        help="Run a fast subset of tests for iterative development.",
+        help="Run a broader fast subset for quick validation.",
     )
     args = parser.parse_args()
 
@@ -2829,7 +2841,9 @@ def main() -> int:
         test_protocol_status_docs_match_contract,
     ]
 
-    if args.fast:
+    if args.ultra_fast:
+        tests = ULTRA_FAST_TESTS
+    elif args.fast:
         tests = FAST_TESTS
     elif args.quick:
         tests = QUICK_TESTS

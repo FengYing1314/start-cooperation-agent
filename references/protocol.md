@@ -27,6 +27,37 @@ The team roster is the source of truth for thread ids and callbacks. Every role 
 
 The executable contract for run statuses, status transitions, and required handoff routes lives in `scripts/start_work_contract.py`. Update that module and the smoke tests together when the protocol changes.
 
+## LLM-First Call Chain
+
+```mermaid
+flowchart TD
+    U[用户指令 / User request] --> I[inspect_project]
+    I -->|team missing or stale| IT[init_team]
+    I -->|team ready| IR[init_run]
+    IT --> AT[ack_team]
+    AT --> IR
+    IR --> PO[prepare_outbound_handoff: work_order]
+    PO -->|send succeeds| FO[finalize_outbound_handoff]
+    FO --> MR[Manager接收Developer实现]
+    MR --> RV[inspect_run]
+    RV --> PR[prepare_outbound_handoff: review_request]
+    PR --> FR[finalize_outbound_handoff]
+    FR --> DC[Developer fix/request loop]
+    DC --> RI[record_inbound_handoff]
+    RI --> RF[reviewer fix handling]
+    RF -->|yes| ST[send state commands]
+    RF -->|no| US[unsent handoff + followup send]
+    US --> ST
+    FR --> AC[reviewer_accepted]
+    AC --> FG[final_delivery]
+```
+
+Primary best-practice notes (from multi-agent workflow guidance):
+
+- Use the manager role as the stable controller; avoid creating many loosely-coupled agents for the same task.
+- Keep handoffs explicit: every transition writes an event and a status so audit replay is deterministic.
+- Keep the loop bounded with a concrete acceptance condition (`accepted`/`blocked`) and explicit evidence requirements for every `reviewer` decision.
+
 ## Live Drill Authorization
 
 Live-thread drills must have explicit user authorization in the current task context before any thread creation or live send.
