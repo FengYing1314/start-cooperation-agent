@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from start_work_contract import RUN_STATUSES, current_run_status, next_allowed_statuses
+from validate_handoff import extract_label
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 FINALIZE_OUTBOUND_HANDOFF = SCRIPT_DIR / "finalize_outbound_handoff.py"
@@ -79,6 +80,37 @@ def compact_event(event: dict[str, object] | None) -> dict[str, object] | None:
         "summary": event.get("summary", ""),
         "file": event.get("file", ""),
     }
+
+
+def next_handoff_sent_word(text: str) -> str:
+    value = extract_label(text, "Next handoff sent")[1]
+    if not value:
+        return ""
+    return value.split(None, 1)[0].strip(".,;:").lower()
+
+
+def latest_reviewer_fix_send_state(run_dir: Path, events: list[dict[str, object]]) -> dict[str, object] | None:
+    for event in reversed(events):
+        if event.get("actor") != "R1" or event.get("to") != "D1":
+            continue
+        if event.get("run_status") != "review_done":
+            continue
+        summary = str(event.get("summary", "")).lower()
+        if "reviewer fix" not in summary:
+            continue
+        file_name = str(event.get("file", "")).strip()
+        payload_text = ""
+        if file_name:
+            payload_path = run_dir / file_name
+            if payload_path.exists():
+                payload_text = payload_path.read_text(encoding="utf-8")
+        sent_word = next_handoff_sent_word(payload_text) if payload_text else ""
+        return {
+            "event_id": event.get("id", ""),
+            "file": file_name,
+            "next_handoff_sent": sent_word,
+        }
+    return None
 
 
 def latest_status_event(events: list[dict[str, object]]) -> dict[str, object] | None:
@@ -177,6 +209,7 @@ def next_actions(
     allowed: list[str],
     problems: list[str],
     pending_outbound: dict[str, object] | None,
+    reviewer_fix_send_state: dict[str, object] | None,
 ) -> list[str]:
     if problems:
         return [
@@ -222,6 +255,19 @@ def next_actions(
             "Record review_done when the review handoff is received.",
         ]
     if current_status == "review_done":
+        if reviewer_fix_send_state:
+            sent_word = str(reviewer_fix_send_state.get("next_handoff_sent", ""))
+            if sent_word == "no":
+                return [
+                    "Latest reviewer_fix copy says Next handoff sent: no.",
+                    "Send or relay that exact fix payload to D1 before appending fix_required or developer_fix_running.",
+                    "After the real D1 send succeeds, record fix_required and then developer_fix_running.",
+                ]
+            if sent_word == "yes":
+                return [
+                    "Latest reviewer_fix copy says the D1 fix handoff was sent.",
+                    "Run the returned follow-up commands from record_inbound_handoff.py, or append fix_required then developer_fix_running after verifying the real send.",
+                ]
         return [
             "If accepted, append accepted; if blocking findings remain, append fix_required.",
             "Do not final-deliver until Manager has verified the current repository state.",
@@ -310,6 +356,7 @@ def inspect_run(run_dir: Path) -> dict[str, object]:
 
     allowed = next_allowed_statuses(current_status)
     pending_outbound = None if problems else find_pending_outbound(run_dir, current_status, events)
+    reviewer_fix_send_state = None if problems else latest_reviewer_fix_send_state(run_dir, events)
     return {
         "ok": not problems,
         "run_dir": str(run_dir),
@@ -324,8 +371,9 @@ def inspect_run(run_dir: Path) -> dict[str, object]:
         "last_event": compact_event(last_event),
         "status_event": compact_event(status_event),
         "pending_outbound": pending_outbound,
+        "reviewer_fix_send_state": reviewer_fix_send_state,
         "problems": problems,
-        "next_actions": next_actions(current_status, allowed, problems, pending_outbound),
+        "next_actions": next_actions(current_status, allowed, problems, pending_outbound, reviewer_fix_send_state),
     }
 
 

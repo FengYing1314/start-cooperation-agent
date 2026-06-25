@@ -756,6 +756,7 @@ def test_reference_routing_is_progressive(root: Path) -> None:
     assert "pending_outbound" in skill, skill
     assert "full fix-review loop progression" in skill, skill
     assert "non-destructive Codex App preflight" in skill, skill
+    assert "If it starts with `no`, send or relay the exact fix payload to D1" in skill, skill
 
     template_index = (SKILL_ROOT / "references" / "templates.md").read_text(encoding="utf-8")
     assert "This file is an index" in template_index, template_index
@@ -1508,6 +1509,10 @@ yes, D1 thread dev-thread.
     assert "developer_fix_running" in fix_commands[1], reviewer_fix_recorded
     reviewer_fix_inspected = json.loads(inspect_run(reviewer_fix_run_dir).stdout)
     assert reviewer_fix_inspected["current_status"] == "review_done", reviewer_fix_inspected
+    assert reviewer_fix_inspected["reviewer_fix_send_state"]["next_handoff_sent"] == "yes", reviewer_fix_inspected
+    assert any("D1 fix handoff was sent" in item for item in reviewer_fix_inspected["next_actions"]), (
+        reviewer_fix_inspected
+    )
     required_followup = json.loads(run(fix_commands[0]).stdout)
     assert required_followup["run_status"] == "fix_required", required_followup
     running_followup = json.loads(run(fix_commands[1]).stdout)
@@ -1594,6 +1599,15 @@ no, D1 thread dev-thread is the unsent target.
     )
     reviewer_fix_unsent_inspected = json.loads(inspect_run(reviewer_fix_unsent_run_dir).stdout)
     assert reviewer_fix_unsent_inspected["current_status"] == "review_done", reviewer_fix_unsent_inspected
+    assert reviewer_fix_unsent_inspected["reviewer_fix_send_state"]["next_handoff_sent"] == "no", (
+        reviewer_fix_unsent_inspected
+    )
+    assert any("Next handoff sent: no" in item for item in reviewer_fix_unsent_inspected["next_actions"]), (
+        reviewer_fix_unsent_inspected
+    )
+    assert any("before appending fix_required" in item for item in reviewer_fix_unsent_inspected["next_actions"]), (
+        reviewer_fix_unsent_inspected
+    )
 
     accepted_run = json.loads(
         script(
