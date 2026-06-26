@@ -8,6 +8,7 @@ Use Codex thread mode when the project should keep an independent, reusable Mana
 - Non-destructive preflight
 - Live drill gate
 - Project selection
+- Automatic bootstrap
 - Team initialization
 - Roster rules
 - Task messaging
@@ -92,11 +93,29 @@ Use `list_projects` before creating long-lived role threads. Select the project 
 
 For WSL projects, use the native Linux path in prompts even if the Codex app target was selected through a Windows path.
 
+## Automatic Bootstrap
+
+When the user asks to initialize, start, reuse, or repair the team and D1/R1 are missing, use `scripts/bootstrap_team.py` as the executable bootstrap contract.
+
+Closed-loop bootstrap sequence:
+
+1. Discover thread tools with `tool_search` when needed.
+2. Call `list_projects`, select the project whose path exactly matches the repo, then pass each candidate to `bootstrap_team.py` as `--codex-project "<projectId=path>"`.
+3. Pass current-context approval as `--live-approval-evidence`. The user's request to initialize or auto-create the team is sufficient approval for D1/R1 creation in that current task context.
+4. Pass an exact `--manager-thread-id` when available. If no tool exposes the current Manager id, do not infer it from fuzzy thread search; ask for the exact id or use `--manager-callback` for manual relay fallback.
+5. For each `create_thread_requests` item, call `create_thread` with the exact `request.target` and `request.prompt`. Do not override model or thinking unless the user explicitly requested it.
+6. Call `set_thread_title` for each returned `threadId` using `set_title_after_create.title`.
+7. Rerun `bootstrap_team.py` with the returned D1/R1 ids and `--apply-roster`.
+8. Read each `standing_instruction_sends.prompt_file` as UTF-8 and send its exact contents to `threadId` with `send_message_to_thread`.
+9. After each role replies with the requested acknowledgement, run the returned `ack_commands` and confirm `inspect_team.py` reports `codex_thread_ready=true` for direct mode.
+
+If `bootstrap_team.py` returns `blocked_reasons`, stop live actions and resolve those reasons before creating threads or sending standing instructions. Never create D1/R1 under a non-matching project target.
+
 ## Team Initialization
 
 The current user-facing conversation is Manager unless the user assigns another coordinator.
 
-Create or confirm one long-lived Developer thread and one long-lived Reviewer thread per project only after the user has asked to initialize, start, reuse, or repair the team. If the user only asked for a status review, stop after preflight and structured ledger inspection. Do not create new Developer or Reviewer threads for each task.
+Create or confirm one long-lived Developer thread and one long-lived Reviewer thread per project only after the user has asked to initialize, start, reuse, or repair the team. Prefer `bootstrap_team.py` for creation, roster application, standing-instruction sends, and acknowledgement commands. If the user only asked for a status review, stop after preflight and structured ledger inspection. Do not create new Developer or Reviewer threads for each task.
 
 Recommended titles:
 
@@ -105,7 +124,7 @@ SW Team <team-id> D1 Developer
 SW Team <team-id> R1 Reviewer
 ```
 
-After creating or confirming threads:
+After creating or confirming threads, either follow `bootstrap_team.py` output or the equivalent manual sequence:
 
 1. Record Manager, Developer, and Reviewer targets with `scripts/init_team.py`.
 2. Read `team/standing-developer.md` and send its exact contents directly to Developer with `send_message_to_thread`.

@@ -1,6 +1,6 @@
 ---
 name: start-work
-description: Coordinate reusable project-level multi-agent software development in Codex App with a long-lived manager/developer/reviewer team, shared thread-id roster, roster-routed handoffs, direct role-to-role thread messaging when available, callback/manual relay fallback, project-local team registry, per-task run ledgers, Manager integration checkpoints, Reviewer acceptance, and repeated fix-review cycles. Use when the user asks to start work, initialize a multi-agent team, reuse developer and reviewer sessions, coordinate agent-to-agent development handoffs, or keep an auditable collaboration record.
+description: Coordinate reusable project-level multi-agent software development in Codex App with automatic long-lived Developer/Reviewer thread bootstrap, a manager/developer/reviewer team, shared thread-id roster, roster-routed handoffs, direct role-to-role thread messaging when available, callback/manual relay fallback, project-local team registry, per-task run ledgers, Manager integration checkpoints, Reviewer acceptance, and repeated fix-review cycles. Use when the user asks to start work, initialize or auto-create a multi-agent team, reuse developer and reviewer sessions, coordinate agent-to-agent development handoffs, or keep an auditable collaboration record.
 ---
 
 # Start Work
@@ -73,6 +73,18 @@ For a project-level resume or audit snapshot, inspect structured state first:
 python3 <skill-dir>/scripts/inspect_project.py --repo <repo-root> --print-json
 ```
 
+For automatic long-lived D1/R1 thread bootstrap after a user asks to initialize or start the team, use:
+
+```bash
+python3 <skill-dir>/scripts/bootstrap_team.py --repo <repo-root> \
+  --codex-project "<projectId=path-from-list_projects>" \
+  --live-approval-evidence "<current-user-approval>" \
+  --manager-thread-id <manager-thread-id> \
+  --print-json
+```
+
+Follow `bootstrap_team.py` JSON in order: call each `create_thread_requests[*].request`, set the returned thread titles, rerun with the returned D1/R1 thread ids and `--apply-roster`, send each `standing_instruction_sends[*].prompt_file` exact contents to its `threadId`, then run the returned `ack_commands` only after the role replies with the requested acknowledgement. If no exact Manager thread id is available, do not guess one from `list_threads`; ask for it or use `--manager-callback` for manual relay fallback.
+
 For a Codex App live-message drill plan that must not create threads or send messages yet, run:
 
 ```bash
@@ -88,17 +100,21 @@ Use the plan's `live_drill_success_criteria` and `completion_evidence_contract` 
 
 1. Read the nearest project `AGENTS.md` and project instructions.
 2. Inspect enough repo context to identify project path, dirty work, and essential project docs.
-3. Create or confirm long-lived Developer and Reviewer Codex threads.
-4. Record the shared team roster:
+3. Use `bootstrap_team.py` to create or confirm one long-lived Developer thread and one long-lived Reviewer thread under the matching Codex App project. Do not create per-task role threads.
+4. After `create_thread` returns D1/R1 thread ids, rerun `bootstrap_team.py` with `--apply-roster` to record the shared team roster:
 
 ```bash
-python3 <skill-dir>/scripts/init_team.py --repo <repo-root> \
-  --manager-thread-id <manager-thread-id-or-empty> \
+python3 <skill-dir>/scripts/bootstrap_team.py --repo <repo-root> \
+  --manager-thread-id <manager-thread-id> \
   --manager-callback <manager-callback-if-needed> \
   --developer-thread-id <developer-thread-id> \
   --reviewer-thread-id <reviewer-thread-id> \
-  --project-doc AGENTS.md
+  --project-doc AGENTS.md \
+  --apply-roster \
+  --print-json
 ```
+
+Use `init_team.py` directly only when repairing generated roster files or when D1/R1 thread ids already exist and no live bootstrap is needed.
 
 5. Send `team/standing-developer.md` directly to Developer and `team/standing-reviewer.md` directly to Reviewer.
 6. Require both threads to send a roster acknowledgement back to Manager.
@@ -163,6 +179,7 @@ python3 scripts/validate_start_work.py --quick
 python3 scripts/validate_start_work.py --list-tests
 python3 scripts/validate_start_work.py --tests test_team_id_is_stable --max-test-seconds 2.0
 python3 scripts/validate_start_work.py --tests test_team_id_is_stable --profile
+python3 scripts/test_start_work.py --only test_bootstrap_team_plans_role_thread_creation --profile
 python3 scripts/validate_start_work.py --ultra-fast --profile
 python3 scripts/validate_start_work.py --ultra-fast --command-timeout-seconds 20 --print-json
 python3 scripts/test_start_work.py --ultra-fast --profile
@@ -179,4 +196,4 @@ Timeout troubleshooting:
 - When a command times out, look for `[...] Command timed out` and then rerun with a smaller `--command-timeout-seconds` or the same timeout in an isolated command to confirm.
 - For intermittent hangs, run `--ultra-fast` first, then expand scope with the timeout guard enabled so each subcommand fails fast with actionable output.
 
-These checks cover stable team ids, team next-step hints, team readiness inspection, Codex App live-drill planning, handoff route invariants, handoff payload validation, outbound handoff send preparation and finalization, inbound handoff recording, project status inspection, project/run resume next-step hints, reviewer fix send-state project resume, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, run next-step hints, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, trigger-eval prompt coverage, CLI launch checks, fixture preparation and artifact cleanup, trigger-eval step hints, dry-run planning, plan execution, UTF-8-safe runner failure artifacts, trace scoring, contract/documentation drift, progressive reference routing, and skill metadata validity.
+These checks cover stable team ids, automatic D1/R1 bootstrap planning, roster apply after created thread ids are known, team next-step hints, team readiness inspection, Codex App live-drill planning, handoff route invariants, handoff payload validation, outbound handoff send preparation and finalization, inbound handoff recording, project status inspection, project/run resume next-step hints, reviewer fix send-state project resume, callback-only rejection for direct `codex-thread` mode, fallback run creation, fallback reason enforcement, direct run creation, run next-step hints, structured run metadata, run inspection, send-state progression, full fix-review loop progression, event recording, trigger-eval prompt coverage, CLI launch checks, fixture preparation and artifact cleanup, trigger-eval step hints, dry-run planning, plan execution, UTF-8-safe runner failure artifacts, trace scoring, contract/documentation drift, progressive reference routing, and skill metadata validity.

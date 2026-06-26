@@ -11,6 +11,10 @@ Use these only when generating files manually or repairing generated output. Pre
 - Ack record
 - Roster update
 
+## Automatic Bootstrap
+
+Prefer `scripts/bootstrap_team.py` when D1/R1 thread ids are missing. It emits exact `create_thread` requests, the roster apply command, standing-instruction send hints, and acknowledgement commands. Use this template file only to repair generated output or reason about the generated files.
+
 ## Team Roster
 
 ```markdown

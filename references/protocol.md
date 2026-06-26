@@ -43,9 +43,9 @@ R1 -> M or manual relay: accepted or blocked
 ```mermaid
 flowchart TD
     U[用户指令 / User request] --> I[inspect_project]
-    I -->|team missing or stale| IT[init_team]
+    I -->|team missing or stale| BT[bootstrap_team: create D1/R1 + apply roster]
     I -->|team ready| IR[init_run]
-    IT --> AT[ack_team]
+    BT --> AT[ack_team]
     AT --> IR
     IR --> PO[prepare_outbound_handoff: work_order]
     PO -->|send succeeds| FO[finalize_outbound_handoff]
@@ -88,11 +88,13 @@ Use `scripts/inspect_project.py --repo <repo-root> --print-json` for a project-l
 Initialize the team once per project:
 
 ```text
-Manager creates or confirms long-lived Developer and Reviewer threads.
-Manager records Manager, Developer, and Reviewer targets in team.json.
-Manager sends standing instructions directly to Developer and Reviewer.
+Manager runs bootstrap_team.py to plan or create missing long-lived Developer and Reviewer threads.
+Manager records Manager, Developer, and Reviewer targets in team.json after concrete thread ids are known.
+Manager sends standing instructions directly to Developer and Reviewer using bootstrap_team.py send hints.
 Developer and Reviewer send roster acknowledgements back to Manager.
 ```
+
+Use `scripts/bootstrap_team.py` when D1/R1 thread ids are missing or being replaced. It returns exact `create_thread` requests, title updates, the roster apply command, standing-instruction send hints, acknowledgement commands, and blocked reasons when Manager id, project match, or approval evidence is missing.
 
 Use `scripts/init_team.py` for the team registry. The script is idempotent and writes:
 

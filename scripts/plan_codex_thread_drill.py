@@ -180,29 +180,47 @@ def live_drill_when_approved(repo: Path) -> list[dict[str, object]]:
             "success_condition": "One project path exactly matches the repo.",
         },
         {
-            "step": "create_or_confirm_role_threads",
+            "step": "bootstrap_role_threads",
             "tools": ["create_thread", "set_thread_title", "list_threads"],
-            "guardrail": "Use one long-lived D1 Developer and one long-lived R1 Reviewer per project; do not create per-task role threads.",
-        },
-        {
-            "step": "record_roster",
             "command": command(
-                "init_team.py",
+                "bootstrap_team.py",
                 "--repo",
                 str(repo),
+                "--codex-project",
+                "<projectId=path>",
+                "--live-approval-evidence",
+                "<approval summary or message id>",
+                "--manager-thread-id",
+                "<manager-thread-id>",
+                "--print-json",
+            ),
+            "guardrail": "Use one long-lived D1 Developer and one long-lived R1 Reviewer per project; do not create per-task role threads.",
+            "success_condition": "Run create_thread_requests exactly, set titles, then rerun bootstrap_team.py with returned D1/R1 thread ids.",
+        },
+        {
+            "step": "apply_bootstrap_roster",
+            "command": command(
+                "bootstrap_team.py",
+                "--repo",
+                str(repo),
+                "--codex-project",
+                "<projectId=path>",
+                "--live-approval-evidence",
+                "<approval summary or message id>",
                 "--manager-thread-id",
                 "<manager-thread-id>",
                 "--developer-thread-id",
                 "<developer-thread-id>",
                 "--reviewer-thread-id",
                 "<reviewer-thread-id>",
+                "--apply-roster",
                 "--print-json",
             ),
         },
         {
             "step": "send_standing_instructions",
             "tool": "send_message_to_thread",
-            "prompt_rule": "Read team/standing-developer.md and team/standing-reviewer.md as UTF-8; pass exact file contents as prompt.",
+            "prompt_rule": "Use bootstrap_team.py standing_instruction_sends; read each prompt_file as UTF-8 and pass exact file contents as prompt.",
         },
         {
             "step": "record_acknowledgements",
@@ -353,8 +371,8 @@ def recommended_next_actions(
         return [
             "Run the non-destructive preflight first.",
             "Include list_projects and rerun this script with --codex-project <projectId=path> before any live drill.",
-            "Ask the user for explicit approval before creating role threads or sending standing instructions.",
-            "After approval, initialize the roster and require D1/R1 acknowledgements before any task run.",
+            "Run bootstrap_team.py after explicit approval to create missing D1/R1 threads, apply the roster, send standing instructions, and record acknowledgements.",
+            "Require D1/R1 acknowledgements before any task run.",
         ]
     if team.get("manual_relay_ready") and not team.get("codex_thread_ready"):
         return [

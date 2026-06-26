@@ -27,6 +27,7 @@ INSPECT_TEAM = SCRIPT_DIR / "inspect_team.py"
 INSPECT_RUN = SCRIPT_DIR / "inspect_run.py"
 INSPECT_PROJECT = SCRIPT_DIR / "inspect_project.py"
 PLAN_CODEX_THREAD_DRILL = SCRIPT_DIR / "plan_codex_thread_drill.py"
+BOOTSTRAP_TEAM = SCRIPT_DIR / "bootstrap_team.py"
 START_WORK_CONTRACT = SCRIPT_DIR / "start_work_contract.py"
 VALIDATE_START_WORK = SCRIPT_DIR / "validate_start_work.py"
 VALIDATE_HANDOFF = SCRIPT_DIR / "validate_handoff.py"
@@ -193,6 +194,11 @@ def inspect_project(repo: Path, *args: str, check: bool = True) -> subprocess.Co
 
 def plan_codex_thread_drill(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return script(PLAN_CODEX_THREAD_DRILL, "--repo", str(repo), *args, "--print-json", check=check)
+
+
+def bootstrap_team(repo: Path, *args: str, check: bool = True) -> dict[str, object]:
+    proc = script(BOOTSTRAP_TEAM, "--repo", str(repo), *args, "--print-json", check=check)
+    return json.loads(proc.stdout)
 
 
 def test_team_id_is_stable(root: Path) -> None:
@@ -397,6 +403,95 @@ def test_project_inspection_guides_preflight_without_team(root: Path) -> None:
     assert any(problem["scope"] == "team" for problem in summary["problems"]), summary
 
 
+def test_bootstrap_team_plans_role_thread_creation(root: Path) -> None:
+    repo = make_repo(root, "bootstrap-plan")
+    result = bootstrap_team(
+        repo,
+        "--team-id",
+        "demo-team",
+        "--manager-thread-id",
+        "manager-thread",
+        "--codex-project",
+        f"project-1={repo}",
+        "--live-approval-evidence",
+        "user approved team initialization",
+        "--project-doc",
+        "AGENTS.md",
+    )
+    assert result["can_create_role_threads"] is True, result
+    assert result["can_apply_roster"] is False, result
+    assert result["missing_role_threads"] == ["D1", "R1"], result
+    assert result["blocked_reasons"] == [], result
+    requests = result["create_thread_requests"]
+    assert isinstance(requests, list) and len(requests) == 2, result
+    for item in requests:
+        assert item["tool"] == "create_thread", item
+        assert item["request"]["target"]["projectId"] == "project-1", item
+        assert item["request"]["target"]["environment"]["type"] == "local", item
+        assert "waiting for standing instructions" in item["request"]["prompt"], item
+        assert item["set_title_after_create"]["tool"] == "set_thread_title", item
+    assert any(part == "<created-D1-thread-id>" for part in result["apply_roster_command"]), result
+    assert any("create_thread" in action for action in result["closed_loop_next_actions"]), result
+
+
+def test_bootstrap_team_applies_roster_and_reaches_ack_ready(root: Path) -> None:
+    repo = make_repo(root, "bootstrap-apply")
+    result = bootstrap_team(
+        repo,
+        "--team-id",
+        "demo-team",
+        "--manager-thread-id",
+        "manager-thread",
+        "--developer-thread-id",
+        "dev-thread",
+        "--reviewer-thread-id",
+        "review-thread",
+        "--codex-project",
+        f"project-1={repo}",
+        "--live-approval-evidence",
+        "user approved team initialization",
+        "--project-doc",
+        "AGENTS.md",
+        "--apply-roster",
+    )
+    assert result["can_create_role_threads"] is False, result
+    assert result["can_apply_roster"] is True, result
+    assert result["direct_codex_thread_ready_after_apply"] is True, result
+    applied = result["applied_roster"]
+    assert applied["roster_complete"] is True, result
+    assert applied["acknowledgements_complete"] is False, result
+    sends = result["standing_instruction_sends"]
+    assert [item["threadId"] for item in sends] == ["dev-thread", "review-thread"], sends
+    assert all("prompt_file" in item for item in sends), sends
+    standing = Path(sends[0]["prompt_file"]).read_text(encoding="utf-8")
+    assert "ACK roster saved for D1, team demo-team." in standing, standing
+
+    ack(repo, "D1")
+    ack(repo, "R1")
+    inspected = json.loads(inspect_team(repo).stdout)
+    assert inspected["ok"] is True, inspected
+    assert inspected["codex_thread_ready"] is True, inspected
+    assert inspected["handoff_route_valid"] is True, inspected
+
+
+def test_bootstrap_team_requires_manager_target_for_closed_loop(root: Path) -> None:
+    repo = make_repo(root, "bootstrap-manager-target")
+    result = bootstrap_team(
+        repo,
+        "--team-id",
+        "demo-team",
+        "--codex-project",
+        f"project-1={repo}",
+        "--live-approval-evidence",
+        "user approved team initialization",
+    )
+    assert result["can_create_role_threads"] is False, result
+    assert result["can_apply_roster"] is False, result
+    assert result["manager_thread_id_required_for_direct_codex_thread"] is True, result
+    assert any("Manager target is missing" in reason for reason in result["blocked_reasons"]), result
+    assert any("Manager target is missing" in action for action in result["closed_loop_next_actions"]), result
+
+
 def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> None:
     repo = make_repo(root, "thread-drill-plan")
     unready = json.loads(plan_codex_thread_drill(repo).stdout)
@@ -439,6 +534,9 @@ def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> Non
     blocked_tools = {item.get("tool") for item in unready["blocked_without_approval"]}
     assert {"create_thread", "send_message_to_thread", "read_thread"} <= blocked_tools, unready
     assert any("explicit approval" in item for item in unready["recommended_next_actions"]), unready
+    live_steps_text = json.dumps(unready["live_drill_when_approved"], ensure_ascii=False)
+    assert "bootstrap_team.py" in live_steps_text, live_steps_text
+    assert "create_thread_requests" in live_steps_text, live_steps_text
 
     init_team(
         repo,
@@ -461,7 +559,8 @@ def test_codex_thread_drill_plan_preserves_live_approval_gate(root: Path) -> Non
     assert state["target_presence"]["M"]["thread_id_present"] is True, ready
     assert ready["codex_project_match"]["checked"] is False, ready
     drill_text = json.dumps(ready["live_drill_when_approved"], ensure_ascii=False)
-    assert "init_team.py" in drill_text, drill_text
+    assert "bootstrap_team.py" in drill_text, drill_text
+    assert "--apply-roster" in drill_text, drill_text
     assert "send_message_to_thread" in drill_text, drill_text
     assert "developer_completion" in drill_text, drill_text
     assert "reviewer_accepted" in drill_text, drill_text
@@ -2918,6 +3017,8 @@ FAST_TESTS = [
     test_run_helper_reports_timeout,
     test_validate_run_step_reports_timeout,
     test_team_inspection_requires_acknowledgements,
+    test_bootstrap_team_plans_role_thread_creation,
+    test_bootstrap_team_requires_manager_target_for_closed_loop,
     test_codex_thread_drill_plan_preserves_live_approval_gate,
     test_project_inspection_guides_preflight_without_team,
     test_direct_thread_happy_path,
@@ -2931,6 +3032,8 @@ ULTRA_FAST_TESTS = [
     test_validate_run_step_reports_timeout,
     test_team_inspection_requires_acknowledgements,
     test_team_inspection_rejects_broken_handoff_route,
+    test_bootstrap_team_plans_role_thread_creation,
+    test_bootstrap_team_requires_manager_target_for_closed_loop,
     test_project_inspection_guides_preflight_without_team,
     test_shared_contract_matches_generated_routes,
     test_protocol_status_docs_match_contract,
@@ -2943,6 +3046,9 @@ QUICK_TESTS = [
     test_validate_run_step_reports_timeout,
     test_team_inspection_requires_acknowledgements,
     test_team_inspection_rejects_broken_handoff_route,
+    test_bootstrap_team_plans_role_thread_creation,
+    test_bootstrap_team_applies_roster_and_reaches_ack_ready,
+    test_bootstrap_team_requires_manager_target_for_closed_loop,
     test_project_inspection_guides_preflight_without_team,
     test_codex_thread_drill_plan_preserves_live_approval_gate,
     test_codex_project_match_accepts_wsl_and_mount_equivalent_paths,
@@ -2967,6 +3073,9 @@ ALL_TESTS = [
     test_validate_start_work_print_json_on_failure,
     test_team_inspection_requires_acknowledgements,
     test_team_inspection_rejects_broken_handoff_route,
+    test_bootstrap_team_plans_role_thread_creation,
+    test_bootstrap_team_applies_roster_and_reaches_ack_ready,
+    test_bootstrap_team_requires_manager_target_for_closed_loop,
     test_project_inspection_guides_preflight_without_team,
     test_codex_thread_drill_plan_preserves_live_approval_gate,
     test_codex_project_match_accepts_wsl_and_mount_equivalent_paths,
