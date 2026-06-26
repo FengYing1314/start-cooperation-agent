@@ -116,6 +116,7 @@ python3 <skill-dir>/scripts/inspect_team.py --repo <repo-root> --print-json
 ```
 
 Direct `codex-thread` runs require `codex_thread_ready=true`. If the Manager thread id is unavailable, record a usable Manager callback only for manual relay fallback. If neither is available, do not enable agent-to-Manager handoffs.
+If `inspect_team.py` or `init_run.py` reports an incomplete `handoff_route`, rerun `scripts/init_team.py` to refresh the generated roster route before starting work.
 
 ## Start A Task
 
@@ -163,6 +164,7 @@ python3 scripts/validate_start_work.py --list-tests
 python3 scripts/validate_start_work.py --tests test_team_id_is_stable --max-test-seconds 2.0
 python3 scripts/validate_start_work.py --tests test_team_id_is_stable --profile
 python3 scripts/validate_start_work.py --ultra-fast --profile
+python3 scripts/validate_start_work.py --ultra-fast --command-timeout-seconds 20 --print-json
 python3 scripts/test_start_work.py --ultra-fast --profile
 python3 scripts/validate_start_work.py --ultra-fast --command-timeout-seconds 20
 python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
@@ -170,7 +172,7 @@ python3 <skill-creator-dir>/scripts/quick_validate.py <skill-dir>
 
 For trigger behavior forward-tests, load `references/trigger-eval-prompts.md`, prepare an isolated fixture, run `scripts/check_trigger_eval_cli.py` or the returned `cli_check`, execute the generated plan with `scripts/run_trigger_eval_plan.py`, then score the artifacts.
 
-`validate_start_work.py` compiles every local Python script, including `start_work_contract.py`, runs the smoke tests, and checks git whitespace/conflict markers when the skill is inside a git worktree.
+`validate_start_work.py` syntax-checks every local Python script with AST parsing, including `start_work_contract.py`, runs the smoke tests, and checks git whitespace/conflict markers when the skill is inside a git worktree.
 
 Timeout troubleshooting:
 - `validate_start_work.py` prints each sub-command before running it.

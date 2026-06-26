@@ -11,6 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from start_work_contract import required_route_specs
+
 IGNORE_RULE = "/.agent-work/"
 SCRIPT_DIR = Path(__file__).resolve().parent
 
@@ -175,6 +177,42 @@ def load_team(repo: Path, *, required: bool) -> tuple[dict[str, object] | None, 
     return team, team_path
 
 
+def has_handoff_route(
+    route: object,
+    source: str,
+    target: str,
+    trigger: str,
+    manager_copy: str,
+) -> bool:
+    if not isinstance(route, list):
+        return False
+    return any(
+        isinstance(entry, dict)
+        and str(entry.get("from", "")).strip() == source
+        and str(entry.get("to", "")).strip() == target
+        and str(entry.get("trigger", "")).strip() == trigger
+        and str(entry.get("manager_copy", "")).strip() == manager_copy
+        for entry in route
+    )
+
+
+def validate_handoff_route(team: dict[str, object], team_path: Path, manager_direct: bool) -> None:
+    route = team.get("handoff_route")
+    if not isinstance(route, list):
+        raise SystemExit(f"team.json handoff_route must be a list: {team_path}")
+
+    missing = [
+        f"{source}->{target} trigger={trigger} manager_copy={manager_copy}"
+        for source, target, trigger, manager_copy in required_route_specs(manager_direct)
+        if not has_handoff_route(route, source, target, trigger, manager_copy)
+    ]
+    if missing:
+        raise SystemExit(
+            f"Start-work team handoff_route is incomplete in {team_path}: "
+            f"{'; '.join(missing)}. Re-run scripts/init_team.py to refresh the team route."
+        )
+
+
 def validate_team(team: dict[str, object], repo: Path, team_path: Path, mode: str) -> None:
     if str(team.get("repo", "")) != str(repo):
         raise SystemExit(f"Team repo does not match current repo in {team_path}")
@@ -202,6 +240,15 @@ def validate_team(team: dict[str, object], repo: Path, team_path: Path, mode: st
 
     manager_entry = roster.get("M", {})
     manager_thread = str(manager_entry.get("thread_id", "")) if isinstance(manager_entry, dict) else ""
+    manager_direct = bool(manager_thread)
+    stored_manager_direct = team.get("manager_direct_handoff")
+    if stored_manager_direct is not None and bool(stored_manager_direct) != manager_direct:
+        raise SystemExit(
+            "manager_direct_handoff mismatch in "
+            f"{team_path}: stored={stored_manager_direct}, expected={manager_direct}. "
+            "Re-run scripts/init_team.py to refresh the team route."
+        )
+    validate_handoff_route(team, team_path, manager_direct)
     if mode == "codex-thread" and not manager_thread:
         raise SystemExit(
             f"Start-work direct codex-thread mode requires M.thread_id in {team_path}. "

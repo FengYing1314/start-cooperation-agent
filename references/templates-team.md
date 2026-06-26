@@ -45,6 +45,7 @@ Acknowledgements Complete: <true-or-false>
 | D1 | <M-or-manual-relay> | implementation ready | n/a | Developer sends completion for Manager integration check. |
 | M | R1 | review-ready package | n/a | Manager sends the review package directly to Reviewer. |
 | R1 | D1 | blocking findings | yes | Reviewer sends fix request directly to Developer and sends Manager a separate copy. |
+| D1 | <M-or-manual-relay> | fix ready | n/a | Developer sends fix completion for Manager integration check. |
 | R1 | <M-or-manual-relay> | accepted or blocked | n/a | Reviewer sends the result for Manager final delivery. |
 
 ## Acknowledgements

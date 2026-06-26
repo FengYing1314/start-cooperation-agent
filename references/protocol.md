@@ -27,6 +27,17 @@ The team roster is the source of truth for thread ids and callbacks. Every role 
 
 The executable contract for run statuses, status transitions, and required handoff routes lives in `scripts/start_work_contract.py`. Update that module and the smoke tests together when the protocol changes.
 
+Required handoff route shape:
+
+```text
+M -> D1: work order ready
+D1 -> M or manual relay: implementation ready
+M -> R1: review-ready package
+R1 -> D1: blocking findings, with Manager copy
+D1 -> M or manual relay: fix ready
+R1 -> M or manual relay: accepted or blocked
+```
+
 ## LLM-First Call Chain
 
 ```mermaid

@@ -85,6 +85,7 @@ def required_route_specs(manager_direct: bool) -> list[tuple[str, str, str, str]
         ("D1", target, "implementation ready", "n/a"),
         ("M", "R1", "review-ready package", "n/a"),
         ("R1", "D1", "blocking findings", "yes"),
+        ("D1", target, "fix ready", "n/a"),
         ("R1", target, "accepted or blocked", "n/a"),
     ]
 

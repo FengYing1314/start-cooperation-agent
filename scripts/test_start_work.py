@@ -75,6 +75,16 @@ def import_validate_module():
     return validate_start_work
 
 
+def parse_validate_json_output(output: str) -> dict[str, object]:
+    for line in reversed(output.strip().splitlines()):
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("{") and line.endswith("}"):
+            return json.loads(line)
+    raise AssertionError(f"No JSON report found in output:\n{output}")
+
+
 def run(
     command: list[str],
     *,
@@ -225,16 +235,49 @@ def test_run_helper_reports_timeout(root: Path) -> None:
 def test_validate_run_step_reports_timeout(root: Path) -> None:
     del root
     validate = import_validate_module()
-    try:
-        validate.run_step(
-            "timeout check",
-            [sys.executable, "-c", "import time; time.sleep(0.2)"],
-            command_timeout_seconds=0.01,
-        )
-    except SystemExit as exc:
-        assert exc.code == 1, exc.code
-    else:
-        raise AssertionError("Expected run_step timeout path to exit with code 1")
+    event = validate.run_step(
+        "timeout check",
+        [sys.executable, "-c", "import time; time.sleep(0.2)"],
+        command_timeout_seconds=0.01,
+    )
+    assert event["ok"] is False, event
+    assert event["timeout"] is True, event
+
+
+def test_validate_start_work_print_json(root: Path) -> None:
+    del root
+    result = script(
+        VALIDATE_START_WORK,
+        "--ultra-fast",
+        "--print-json",
+        "--skip-git-diff-check",
+        check=False,
+    )
+    assert result.returncode == 0, result
+    data = parse_validate_json_output(result.stdout)
+    assert data["ok"] is True, data
+    assert data["mode"] == "ultra-fast", data
+    assert data["code"] == 0, data
+    assert isinstance(data["events"], list) and data["events"], data
+    assert any(event["label"] == "syntax check scripts" for event in data["events"]), data
+
+
+def test_validate_start_work_print_json_on_failure(root: Path) -> None:
+    del root
+    result = script(
+        VALIDATE_START_WORK,
+        "--ultra-fast",
+        "--tests",
+        "test_team_id_is_stable",
+        "--print-json",
+        check=False,
+    )
+    assert result.returncode != 0, result
+    data = parse_validate_json_output(result.stdout)
+    assert data["ok"] is False, data
+    assert data["code"] == 1, data
+    assert data["failed_at"] == "arg_validation", data
+    assert data["message"] == "--tests cannot be used with --ultra-fast/--fast/--quick.", data
 
 
 def test_team_inspection_requires_acknowledgements(root: Path) -> None:
@@ -281,9 +324,17 @@ def test_team_inspection_requires_acknowledgements(root: Path) -> None:
     assert ready["codex_thread_ready"] is True, ready
     assert ready["manual_relay_ready"] is False, ready
     assert ready["handoff_route_valid"] is True, ready
-    assert ready["handoff_route_count"] == 5, ready
+    assert ready["handoff_route_count"] == 6, ready
     assert any("Start direct codex-thread runs" in action for action in ready["next_actions"]), ready
     assert any("exact handoff contents" in action for action in ready["next_actions"]), ready
+    team_path = repo / ".agent-work" / "start-work" / "team" / "team.json"
+    team = json.loads(team_path.read_text(encoding="utf-8"))
+    assert any(
+        entry.get("from") == "D1"
+        and entry.get("to") == "M"
+        and entry.get("trigger") == "fix ready"
+        for entry in team["handoff_route"]
+    ), team
 
 
 def test_team_inspection_rejects_broken_handoff_route(root: Path) -> None:
@@ -304,7 +355,7 @@ def test_team_inspection_rejects_broken_handoff_route(root: Path) -> None:
     team["handoff_route"] = [
         entry
         for entry in team["handoff_route"]
-        if not (entry.get("from") == "R1" and entry.get("to") == "D1")
+        if not (entry.get("from") == "D1" and entry.get("trigger") == "fix ready")
     ]
     team_path.write_text(json.dumps(team, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -315,7 +366,23 @@ def test_team_inspection_rejects_broken_handoff_route(root: Path) -> None:
     assert data["ok"] is False, data
     assert data["codex_thread_ready"] is False, data
     assert data["handoff_route_valid"] is False, data
-    assert any("R1->D1" in problem for problem in data["problems"]), data
+    assert any("D1->M" in problem and "fix ready" in problem for problem in data["problems"]), data
+
+    init_proc = script(
+        INIT_RUN,
+        "--repo",
+        str(repo),
+        "--slug",
+        "broken-route",
+        "--request",
+        "test",
+        "--print-json",
+        check=False,
+    )
+    init_combined = init_proc.stdout + init_proc.stderr
+    assert init_proc.returncode != 0, init_combined
+    assert "handoff_route is incomplete" in init_combined, init_combined
+    assert "D1->M" in init_combined and "fix ready" in init_combined, init_combined
 
 
 def test_project_inspection_guides_preflight_without_team(root: Path) -> None:
@@ -2795,6 +2862,23 @@ def test_protocol_status_docs_match_contract(root: Path) -> None:
     contract = import_contract_module()
     protocol = (SKILL_ROOT / "references" / "protocol.md").read_text(encoding="utf-8")
 
+    direct_route = contract.required_route_specs(True)
+    relay_route = contract.required_route_specs(False)
+    expected_route_lines = []
+    for direct, relay in zip(direct_route, relay_route, strict=True):
+        source, direct_target, trigger, manager_copy = direct
+        relay_source, relay_target, relay_trigger, relay_manager_copy = relay
+        assert (source, trigger, manager_copy) == (relay_source, relay_trigger, relay_manager_copy)
+        target = direct_target
+        if direct_target != relay_target:
+            assert direct_target == "M", (direct, relay)
+            assert relay_target == contract.MANUAL_RELAY_MANAGER_TARGET, (direct, relay)
+            target = "M or manual relay"
+        copy_note = ", with Manager copy" if manager_copy == "yes" else ""
+        expected_route_lines.append(f"{source} -> {target}: {trigger}{copy_note}")
+    route_lines = fenced_block_after(protocol, "Required handoff route shape:")
+    assert route_lines == expected_route_lines, route_lines
+
     assert set(contract.ALLOWED_STATUS_TRANSITIONS) == contract.RUN_STATUSES
     transition_targets = set().union(*contract.ALLOWED_STATUS_TRANSITIONS.values())
     assert transition_targets <= contract.RUN_STATUSES, transition_targets - contract.RUN_STATUSES
@@ -2846,9 +2930,9 @@ ULTRA_FAST_TESTS = [
     test_run_helper_reports_timeout,
     test_validate_run_step_reports_timeout,
     test_team_inspection_requires_acknowledgements,
+    test_team_inspection_rejects_broken_handoff_route,
     test_project_inspection_guides_preflight_without_team,
-    test_codex_thread_drill_plan_preserves_live_approval_gate,
-    test_direct_thread_happy_path,
+    test_shared_contract_matches_generated_routes,
     test_protocol_status_docs_match_contract,
 ]
 
@@ -2879,6 +2963,8 @@ ALL_TESTS = [
     test_team_id_is_stable,
     test_run_helper_reports_timeout,
     test_validate_run_step_reports_timeout,
+    test_validate_start_work_print_json,
+    test_validate_start_work_print_json_on_failure,
     test_team_inspection_requires_acknowledgements,
     test_team_inspection_rejects_broken_handoff_route,
     test_project_inspection_guides_preflight_without_team,

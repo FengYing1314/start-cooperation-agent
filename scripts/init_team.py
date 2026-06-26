@@ -131,11 +131,17 @@ def build_route(manager_direct: bool) -> list[dict[str, str]]:
         if manager_direct
         else "Reviewer prepares accepted or blocked status for Manager through callback/manual relay."
     )
+    developer_fix_to_manager_note = (
+        "Developer sends fix completion directly to Manager for another integration check."
+        if manager_direct
+        else "Developer prepares fix completion for Manager through callback/manual relay."
+    )
     notes = {
         ("M", "work order ready"): "Manager sends the work order directly to Developer.",
         ("D1", "implementation ready"): developer_to_manager_note,
         ("M", "review-ready package"): "Manager sends the review package directly to Reviewer.",
         ("R1", "blocking findings"): reviewer_fix_note,
+        ("D1", "fix ready"): developer_fix_to_manager_note,
         ("R1", "accepted or blocked"): reviewer_to_manager_note,
     }
     return [
